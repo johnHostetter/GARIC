@@ -84,10 +84,10 @@ def missingData(data):
         print('\nNo missing data has been identified.')
         
 def covariance(data):
-    print(data.cov())
+    print(data.iloc[:,1:].cov())
 
 def correlation(data):
-    print(data.corr())
+    print(data.iloc[:,1:].corr())
     print('\nRemember: an absolute value of a correlation entry of 0.6 or greater is significant.')
     
 def boxAndWhiskerPlot(data):
@@ -162,6 +162,44 @@ def standardization(data):
     scaler = StandardScaler()
     scaled_values = scaler.fit_transform(data.iloc[:,1:])
     data.loc[:,1:] = scaled_values
+    
+def pca(data):
+    # define a matrix
+    A = data.iloc[:,1:].values
+    # create the PCA instance
+    print('\nWould you like to keep a certain number of components or certain amount of total variance?')
+    print('Options: [ 0 -> Number of Components, 1 -> Variance ]')
+    selection = int(input())
+    pca = None
+    if selection == 0:
+        print('\nHow many components would you like to keep? (Enter an integer value.)')
+        components = int(input())
+        pca = PCA(components)
+    elif selection == 1:
+        print('\nHow much variance would you like to keep? (Enter a float value.)')
+        variance = float(input())
+        pca = PCA(variance)
+    else:
+        print('\nUnrecognized command.')
+        return
+    # fit on data
+    pca.fit(A)
+    # access values and vectors
+    print('\nView the PCA components? [ Y / N ]')
+    view_components = input().upper()
+    if view_components == 'Y':    
+        print(pca.components_)
+    print('\nView the explained variance? [ Y / N ]')
+    view_explanation = input().upper()
+    if view_explanation == 'Y':    
+        print(pca.explained_variance_)
+    print('\nPerform the transformation and view the results? [ Y / N ]')
+    view_transformation = input().upper()
+    if view_transformation == 'Y':    
+        print('\nTransformed data:\n')
+        # transform data
+        B = pca.transform(A)
+        print(B)
                 
 def menu(data):
     while True:
@@ -179,6 +217,7 @@ def menu(data):
             8: normalization,
             9: standardization,
             10: histogram,
+            11: pca,
         }
         
         # display menu
@@ -206,7 +245,7 @@ while execute:
     # read in the provided data
     try:    
         execute = False
-        data = pandas.read_csv(filename)
+        data = pd.read_csv(filename)
         print('File found.')
         print('\nLoading data...')
         
