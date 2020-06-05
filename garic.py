@@ -10,50 +10,99 @@ import math
 import random
 import numpy as np
 
+class GARIC():
+    """ Generalized Approximate Reasoning Intelligent Controller """
+    def __init__(self, inputVariables, outputVariables, rules, h):
+        self.aen = AEN(len(inputVariables), h)
+        self.asn = ASN(inputVariables, outputVariables, rules)
+        self.sam = SAM()
+    def play(self, x):
+        self.aen.X.append(x) # state at time-step t + 1
+        
 class AEN():
-    """ action evaluation network """
+    """ Action Evaluation Network """
     def __init__(self, n, h):
-        self.n = n
-        self.h = h
-        self.x = np.array([0.0]*(n + 1)) # plus one for the bias input
-        self.a = np.array([0.0]*((n + 1)*h)).reshape(n + 1, h) # plus one for the bias input weight (input to hidden layer weights)
-        self.b = np.array([0.0]*(n + 1)) # plus one for the bias input weight (input to output weights)
-        self.c = np.array([0.0]*(h)) # weights for hidden layer, Y
+        self.n = n # the number of inputs
+        self.h = h # the number of neurons in the hidden layer
+        self.beta = 0.5 # constant that is greater than zero
+        self.gamma = 0.9 # discount rate between 0 and 1
+        self.X = [] # the history of visited states
+        self.A = [] # the history of previous weights, a
+        self.B = [] # the history of previous weights, b
+        self.C = [] # the history of previous weights, c
+        self.R = [] # the history of actual rewards, r
+        self.R_hat = [] # the history of internal reinforcements, r^
         self.__weights(n, h)
     def __weights(self, n, h):
-        """ initializes all the weights in the action evaluation network 
-        with random values """
+        """ Initializes all the weights in the action evaluation network 
+        with random values. """
+        a = np.array([0.0]*((n + 1)*h)).reshape(n + 1, h) # plus one for the bias input weight (input to hidden layer weights)
+        b = np.array([0.0]*(n + 1)) # plus one for the bias input weight (input to output weights)
+        c = np.array([0.0]*(h)) # weights for hidden layer, Y
         # random initialization of the input to hidden layer weights
         for row in range(self.n + 1):
             for col in range(self.h):
-                self.a[row, col] = random.random()
+                a[row, col] = random.random()
         # random initialization of the input to output weights
         for idx in range(n + 1):
-            self.b[idx] = random.random()
+            b[idx] = random.random()
         # random initialization of the hidden layer to output weights
         for idx in range(h):
-            self.c[idx] = random.random()
-    def __y(self, i):
-        """ calculates the weighted sum of the ith hidden layer neuron """ 
+            c[idx] = random.random()
+        # append weights to the history of the action evaluation network
+        self.A.append(a)
+        self.B.append(b)
+        self.C.append(c)
+    def __y(self, i, t, t_next):
+        """ Calculates the weighted sum of the ith hidden layer neuron
+        with weights at time-step t and input at time-step t + 1. """ 
         s = 0.0
         for j in range(self.n):
-            inpt = self.x[j]
-            weight = self.a[i, j]
+            inpt = self.X[t_next][j] # the input at time t + 1
+            weight = self.A[t][j, i] # the weight at time t
             s += weight * inpt
         return self.__g(s)
     def __g(self, s):
-        """ sigmoid function """ 
+        """ Sigmoid activation function. """ 
         return 1 / (1 + math.pow(np.e, -s))
-    def v(self, x):
-        """ determines the value of the provided current state """
-        self.x = x
+    def v(self, t, t_next):
+        """ Determines the value of the provided current state. """
         inpts_sum = 0.0
         hidden_sum = 0.0
         for i in range(n):
-            inpts_sum += self.b[i] * self.x[i]
+            inpts_sum += self.B[t][i] * self.X[t_next][i] # the weight, b, at time t and the input, x, at time t + 1
         for i in range(n):
-            hidden_sum += self.c[i] * self.__y(i)
+            hidden_sum += self.C[t][i] * self.__y(i, t, t_next) # the weight, c, at time t and the input, y, at time t + 1
         return inpts_sum + hidden_sum
+    def r_hat(self, t):
+        """ Calculate internal reinforcement given a state, x, and an
+        actual reward, r, received at time step t + 1. """
+        if len(self.X) <= 1: # start state
+            val = 0
+        elif self.X == None: # IMPLEMENT: fail state
+            val = self.R[t + 1] - self.v(t, t)
+        else:
+            val = self.R[t + 1] - self.gamma * self.v(t, t + 1) - self.v(t, t)
+        self.R_hat.append(val)
+        return val
+    def backpropagation(self, t):
+        """ Updates the weights of the action evaluation network. """
+        # update the weights, b
+        b_next_t = np.array([0.0]*len(self.B[t]))
+        for i in range(len(self.B[t])):
+            b_next_t[i] = self.B[t][i] + self.beta * self.R_hat[t + 1] * self.X[t][i]
+        self.B.append(b_next_t)
+        # update the weights, c
+        c_next_t = np.array([0.0]*len(self.C[t]))
+        for i in range(len(self.C[t])):
+            c_next_t[i] = self.C[t][i] + self.beta * self.R_hat[t + 1] * self.__y(i, t, t)
+        self.C.append(c_next_t)
+        # update the weights, a
+        a_next_t = copy.deepcopy(self.A[t])
+        for j in range(len(self.A[t])):
+            for i in range(len(self.A[t][j])):
+                a_next_t[j][i] = self.A[t][j][i] + self.beta * self.R_hat[t + 1] * self.__y(i, t, t) * (1 - self.__y(i, t, t))*np.sign(self.C[t][i])*self.X[t][j]
+        self.A.append(a_next_t)
     
 class ASN():
     """ Action Selection Network """
@@ -74,9 +123,6 @@ class ASN():
         for variable in self.inputVariables:
             terms.extend(variable.terms)
         return terms
-#    def __rules(self):
-#        """ Generates the list of rules to be used in the third layer. """
-#        return self.rules
     def __o2(self):
         """ Assigns the weights between input layer and terms layer.
         A weight of '1' is assigned if the connection exists, a weight
@@ -151,7 +197,24 @@ class ASN():
         # forward pass from layer 4 to layer 5
         F = sum(o4activation) / sum(o3activation)
         return F
-        
+
+class SAM():
+    """ Stochastic Action Modifier """
+    def __init__(self):
+        pass
+    def sigma(self, r_hat):
+        """ Given the internal reinforcement from time step t - 1 """
+        return math.exp(r_hat)
+    def F_prime(self, F, r_hat):
+        """ The actual recommended action to be applied to the system. """
+        mu = F
+        sigma = self.sigma(r_hat)
+        samples = 1
+        return np.random.normal(mu, sigma, samples)
+    def s(self, F, r_hat):
+        """ perturbation """
+        return (self.F_prime(F, r_hat) - F) / self.sigma(r_hat)
+    
 class Term():
     """ a linguistic term for a linguistic variable """
     def __init__(self, label, center, leftSpread, rightSpread):
@@ -170,9 +233,9 @@ class Term():
 
 class Variable():
     def __init__(self, idx, name, terms):
-        """ idx is the index of the corresponding input/output, name is the
-        linguistic variable's name, and terms are the values that 
-        variable can take on """
+        """ The parameter idx is the index of the corresponding input/output, 
+        name is the linguistic variable's name, and terms are the values that 
+        variable can take on. """
         self.idx = idx
         self.name = name
         self.terms = terms
@@ -208,7 +271,14 @@ for idx in range(n + 1):
     x[idx] = random.random()
     
 aen = AEN(n, h)
-print(aen.v(x))
+aen.X.append(x)
+aen.X.append(x)
+aen.R.append(0)
+aen.R.append(1)
+print(aen.v(0, 1))
+print(aen.r_hat(0))
+print(aen.r_hat(0))
+print(aen.backpropagation(0))
 
 # build ASN
 
