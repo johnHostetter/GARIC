@@ -6,7 +6,10 @@ Created on Fri May 29 19:10:50 2020
 """
 
 import gym
+import random
+import numpy as np
 from garic import Term, Variable, Rule, GARIC
+from continuous_cartpole import ContinuousCartPoleEnv
 
 # antecedent terms
 po1 = Term('PO1', 0.3, 0.3, -1)
@@ -65,13 +68,41 @@ rules = [
 
 agent = GARIC(inputVariables, outputVariables, rules, 10)
 
-env = gym.make("CartPole-v1")
+#env = gym.make("CartPole-v1")
+env = ContinuousCartPoleEnv()
+env.min_action = -float('inf')
+env.max_action = float('inf')
+env.action_space = gym.spaces.Box(
+    low=env.min_action,
+    high=env.max_action,
+    shape=(1,)
+)
+
 observation = env.reset()
-for _ in range(1000):
+agent.X.append(observation) # GARIC observe the environment
+agent.R.append(0)
+agent.R_hat.append(0)
+t = 0
+print(observation)
+for _ in range(10000):
     env.render()
-    action = env.action_space.sample() # your agent here (this takes random actions)
-    observation, reward, done, info = env.step(action)
+    print('time-step: %s' % t)
+#    action = env.action_space.sample() # your agent here (this takes random actions)
+    F = np.array([agent.action(t)], dtype='float32')
+    observation, reward, done, info = env.step(F)
+    observation[0] /= 100
+    observation[1] /= 1000 # normalize the velocities
+    observation[3] /= 1000 # normalize the velocities
+    observation[2] /= 100
+    agent.X.append(observation) # GARIC observe the environment
+    agent.R.append(reward) # GARIC observe the reward
+    agent.aen.r_hat(t, done) # GARIC determine internal reinforcement
+    agent.aen.backpropagation(t) # GARIC update weights on AEN
+    agent.asn.backpropagation(agent.aen, agent.sam, t)
+    t += 1
+    print(reward)
     
     if done:
         observation = env.reset()
+        print('reset')
 env.close()

@@ -19,10 +19,11 @@ class GARIC():
         self.Fs = [] # the history of recommended actions, F
         self.F_primes = [] # the history of actual actions, F'
         self.aen = AEN(self.X, self.R, self.R_hat, len(inputVariables), h)
-        self.asn = ASN(self.X, inputVariables, outputVariables, rules)
+        self.asn = ASN(self.X, self.Fs, self.R_hat, inputVariables, outputVariables, rules)
         self.sam = SAM(self.Fs, self.F_primes, self.R_hat)
-    def play(self, x):
-        self.aen.X.append(x) # state at time step t + 1
+    def action(self, t):
+        self.asn.forward(t)
+        return self.sam.F_prime(t)
         
 class AEN():
     """ Action Evaluation Network """
@@ -30,6 +31,7 @@ class AEN():
         self.X = X
         self.R = R
         self.R_hat = R_hat
+        self.bias = random.random() # random bias
         self.n = n # the number of inputs
         self.h = h # the number of neurons in the hidden layer
         self.beta = 0.5 # constant that is greater than zero
@@ -47,13 +49,13 @@ class AEN():
         # random initialization of the input to hidden layer weights
         for row in range(self.n + 1):
             for col in range(self.h):
-                a[row, col] = random.random()
+                a[row, col] = random.uniform(-0.1, 0.1)
         # random initialization of the input to output weights
         for idx in range(n + 1):
-            b[idx] = random.random()
+            b[idx] = random.uniform(-0.1, 0.1)
         # random initialization of the hidden layer to output weights
         for idx in range(h):
-            c[idx] = random.random()
+            c[idx] = random.uniform(-0.1, 0.1)
         # append weights to the history of the action evaluation network
         self.A.append(a)
         self.B.append(b)
@@ -79,12 +81,12 @@ class AEN():
         for i in range(n):
             hidden_sum += self.C[t][i] * self.__y(i, t, t_next) # the weight, c, at time t and the input, y, at time t + 1
         return inpts_sum + hidden_sum
-    def r_hat(self, t):
+    def r_hat(self, t, done=False):
         """ Calculate internal reinforcement given a state, x, and an
         actual reward, r, received at time step t + 1. """
         if len(self.X) <= 1: # start state
             val = 0
-        elif self.X == None: # IMPLEMENT: fail state
+        elif done == True:
             val = self.R[t + 1] - self.v(t, t)
         else:
             val = self.R[t + 1] - self.gamma * self.v(t, t + 1) - self.v(t, t)
@@ -92,10 +94,12 @@ class AEN():
         return val
     def backpropagation(self, t):
         """ Updates the weights of the action evaluation network. """
+        x = [self.bias]
+        x.extend(self.X[t])
         # update the weights, b
         b_next_t = np.array([0.0]*len(self.B[t]))
         for i in range(len(self.B[t])):
-            b_next_t[i] = self.B[t][i] + self.beta * self.R_hat[t + 1] * self.X[t][i]
+            b_next_t[i] = self.B[t][i] + self.beta * self.R_hat[t + 1] * x[i]
         self.B.append(b_next_t)
         # update the weights, c
         c_next_t = np.array([0.0]*len(self.C[t]))
@@ -106,17 +110,20 @@ class AEN():
         a_next_t = copy.deepcopy(self.A[t])
         for j in range(len(self.A[t])):
             for i in range(len(self.A[t][j])):
-                a_next_t[j][i] = self.A[t][j][i] + self.beta * self.R_hat[t + 1] * self.__y(i, t, t) * (1 - self.__y(i, t, t))*np.sign(self.C[t][i])*self.X[t][j]
+                a_next_t[j][i] = self.A[t][j][i] + self.beta * self.R_hat[t + 1] * self.__y(i, t, t) * (1 - self.__y(i, t, t))*np.sign(self.C[t][i])*x[j]
         self.A.append(a_next_t)
     
 class ASN():
     """ Action Selection Network """
-    def __init__(self, X, inputVariables, outputVariables, rules):
+    def __init__(self, X, Fs, R_hat, inputVariables, outputVariables, rules):
         self.X = X
-        self.k = 3.14 # the degree of hardness for softmin
+        self.Fs = Fs
+        self.R_hat = R_hat
+        self.k = 10 # the degree of hardness for softmin
+        self.eta = 0.01 # the learning rate
         self.inputVariables = inputVariables
         self.outputVariables = outputVariables
-        self.o1 = np.array([0.0]*len(inputVariables)) # input layer
+#        self.o1 = np.array([0.0]*len(inputVariables)) # input layer
         self.antecedents = self.__antecedents() # generates the antecedents layer
         self.o1o2Weights = self.__o2() # assigns the weights between input layer and terms layer
         self.rules = rules # generates the rules layer
@@ -172,14 +179,13 @@ class ASN():
     def forward(self, t):
         """ Completes a forward pass through the Action Selection Network
         provided a given input state. """
-        self.o1 = self.X[t]
         o2activation = copy.deepcopy(self.o1o2Weights)
         # forward pass from layer 1 to layer 2
-        for i in range(len(self.o1)):
+        for i in range(len(self.X[t])):
             o2 = np.where(self.o1o2Weights[i]==1.0)[0] # get all indexes that this input maps to
             for j in o2:
                 antecedent = self.antecedents[j]
-                deg = antecedent.degree(self.o1[i])
+                deg = antecedent.degree(self.X[t][i])
                 o2activation[i, j] = deg
         # forward pass from layer 2 to layer 3
         o3activation = np.array([0.0]*len(self.rules))
@@ -202,6 +208,7 @@ class ASN():
             o4activation[col] = (consequent.center + 0.5 * (consequent.rightSpread - consequent.leftSpread)) * rulesSum - 0.5 * (consequent.rightSpread - consequent.leftSpread) * rulesSquaredSum
         # forward pass from layer 4 to layer 5
         F = sum(o4activation) / sum(o3activation)
+        self.Fs.append(F)
         return F
     def dz_dcV(self, w):
         return 1
@@ -212,8 +219,8 @@ class ASN():
     def dF_dpV(self):
         p = []
         cV = 0.0
-        sVR = 0.0
         sVL = 0.0
+        sVR = 0.0
         # forward pass from layer 2 to layer 3
         o3activation = np.array([0.0]*len(self.rules))
         for i in range(len(self.rules)):
@@ -223,12 +230,13 @@ class ASN():
             rulesIndexes = np.where(self.o3o4Weights[:,j] == 1.0)[0]
             for ruleIndex in rulesIndexes: 
                 cV += o3activation[ruleIndex] * self.dz_dcV(o3activation[ruleIndex])
-                sVR += o3activation[ruleIndex] * self.dz_dsVR(o3activation[ruleIndex])
                 sVL += o3activation[ruleIndex] * self.dz_dsVL(o3activation[ruleIndex])
+                sVR += o3activation[ruleIndex] * self.dz_dsVR(o3activation[ruleIndex])
+
             cV /= sum(o3activation)
-            sVR /= sum(o3activation)
             sVL /= sum(o3activation)
-            p.extend([cV, sVR, sVL])
+            sVR /= sum(o3activation)
+            p.extend([cV, sVL, sVR])
         return np.array(p)
     def dz_dwr(self):
         pass
@@ -242,12 +250,20 @@ class ASN():
         return self.dv_dF() * self.dF_dpV()
     def delta_p(self, t, sam, aen):
         return self.eta * sam.s(t) * aen.R_hat[t] * self.dv_dpV()
-    def backpropagation(self, aen, t):
-        dv_dF_numerator = aen.v(t, t) - aen.v(t - 1, t - 1)
+    def backpropagation(self, aen, sam, t):
+        dv_dF_numerator = aen.v(t, t) - aen.v(t, t - 1)
         dv_dF_denominator = self.forward(t) - self.forward(t - 1)
-        dv_dF = dv_dF_numerator / dv_dF_denominator
-        return dv_dF
-
+        dv_dF = np.sign(dv_dF_numerator / dv_dF_denominator)
+        delta_pV = self.eta * sam.s(t) * self.R_hat[t] * dv_dF * self.dF_dpV() # temporary, just works for consequents
+        new_weights = np.array([0.0, 0.0, 0.0]*len(self.consequents)).reshape(len(self.consequents), 3)
+        for i in range(len(self.consequents)):
+            self.consequents[i].center += delta_pV[0+(i*3)]
+            self.consequents[i].leftSpread += delta_pV[1+(i*3)]
+            self.consequents[i].rightSpread += delta_pV[2+(i*3)]
+            new_weights[i, 0] = self.consequents[i].center
+            new_weights[i, 1] = self.consequents[i].leftSpread
+            new_weights[i, 2] = self.consequents[i].rightSpread
+            
 class SAM():
     """ Stochastic Action Modifier """
     def __init__(self, Fs, F_primes, R_hat):
@@ -262,7 +278,9 @@ class SAM():
         mu = self.Fs[t]
         sigma = self.sigma(self.R_hat[t - 1])
         samples = 1
-        return np.random.normal(mu, sigma, samples)[0]
+        F_prime = np.random.normal(mu, sigma, samples)[0]
+        self.F_primes.append(F_prime)
+        return F_prime
     def s(self, t):
         """ Calculates the perturbation at each time step and is simply
         the normalized deviation from the action selection network's 
@@ -391,7 +409,7 @@ rules = [
         Rule([vs1, vs2, ne3, ns4], [nvs])
         ]
 
-asn = ASN([], inputVariables, outputVariables, rules)
+asn = ASN([], [], [], inputVariables, outputVariables, rules)
 state = None
 while True:
     state = np.array([0.0]*(4)) # plus one for the bias input
@@ -402,15 +420,15 @@ while True:
     print(rules[0].degreeOfApplicability(2, state))
     break
 
-asn.X.append(state)
-print(asn.forward(0))
-print(asn.dF_dpV())
-print(len(asn.dF_dpV()))
-
-sam = SAM()
-
-eta = 0.3
-t = 0
-sam.R_hat = aen.R_hat
-sam.Fs = [asn.forward(0), asn.forward(0)]
-pV = eta * sam.s(t) * aen.R_hat[t] * np.sign(asn.backpropagation(aen, t))
+#asn.X.append(state)
+#print(asn.forward(0))
+#print(asn.dF_dpV())
+#print(len(asn.dF_dpV()))
+#
+#sam = SAM([], [], [])
+#
+#eta = 0.3
+#t = 0
+#sam.R_hat = aen.R_hat
+#sam.Fs = [asn.forward(0), asn.forward(0)]
+#pV = eta * sam.s(t) * aen.R_hat[t] * np.sign(asn.backpropagation(sam, t))
