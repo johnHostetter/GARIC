@@ -17,7 +17,7 @@ class GARIC():
         self.asn = ASN(inputVariables, outputVariables, rules)
         self.sam = SAM()
     def play(self, x):
-        self.aen.X.append(x) # state at time-step t + 1
+        self.aen.X.append(x) # state at time step t + 1
         
 class AEN():
     """ Action Evaluation Network """
@@ -55,7 +55,7 @@ class AEN():
         self.C.append(c)
     def __y(self, i, t, t_next):
         """ Calculates the weighted sum of the ith hidden layer neuron
-        with weights at time-step t and input at time-step t + 1. """ 
+        with weights at time step t and input at time step t + 1. """ 
         s = 0.0
         for j in range(self.n):
             inpt = self.X[t_next][j] # the input at time t + 1
@@ -107,6 +107,7 @@ class AEN():
 class ASN():
     """ Action Selection Network """
     def __init__(self, inputVariables, outputVariables, rules):
+        self.X = []
         self.k = 3.14 # the degree of hardness for softmin
         self.inputVariables = inputVariables
         self.outputVariables = outputVariables
@@ -163,10 +164,10 @@ class ASN():
                 if consequent in rule.consequents:
                     weights[row, col] = 1
         return weights
-    def forward(self, state):
+    def forward(self, t):
         """ Completes a forward pass through the Action Selection Network
         provided a given input state. """
-        self.o1 = state
+        self.o1 = self.X[t]
         o2activation = copy.deepcopy(self.o1o2Weights)
         # forward pass from layer 1 to layer 2
         for i in range(len(self.o1)):
@@ -197,23 +198,71 @@ class ASN():
         # forward pass from layer 4 to layer 5
         F = sum(o4activation) / sum(o3activation)
         return F
+    def dz_dcV(self, w):
+        return 1
+    def dz_dsVR(self, w):
+        return 0.5 * (1 - w)
+    def dz_dsVL(self, w):
+        return -1 * (1 - w)
+    def dF_dpV(self):
+        p = []
+        cV = 0.0
+        sVR = 0.0
+        sVL = 0.0
+        # forward pass from layer 2 to layer 3
+        o3activation = np.array([0.0]*len(self.rules))
+        for i in range(len(self.rules)):
+            rule = self.rules[i]
+            o3activation[i] = rule.degreeOfApplicability(self.k, self.X[len(self.X) - 1])
+        for j in range(len(self.consequents)):
+            rulesIndexes = np.where(self.o3o4Weights[:,j] == 1.0)[0]
+            for ruleIndex in rulesIndexes: 
+                cV += o3activation[ruleIndex] * self.dz_dcV(o3activation[ruleIndex])
+                sVR += o3activation[ruleIndex] * self.dz_dsVR(o3activation[ruleIndex])
+                sVL += o3activation[ruleIndex] * self.dz_dsVL(o3activation[ruleIndex])
+            cV /= sum(o3activation)
+            sVR /= sum(o3activation)
+            sVL /= sum(o3activation)
+            p.extend([cV, sVR, sVL])
+        return np.array(p)
+    def dz_dwr(self):
+        pass
+    def dF_dwr(self):
+        pass
+    def dwr_dmuj(self):
+        pass
+    def dF_dmuv(self):
+        pass
+    def dv_dpV(self):
+        return self.dv_dF() * self.dF_dpV()
+    def delta_p(self, t, sam, aen):
+        return self.eta * sam.s(t) * aen.R_hat[t] * self.dv_dpV()
+    def backpropagation(self, aen, t):
+        dv_dF_numerator = aen.v(t, t) - aen.v(t - 1, t - 1)
+        dv_dF_denominator = self.forward(t) - self.forward(t - 1)
+        dv_dF = dv_dF_numerator / dv_dF_denominator
+        return dv_dF
 
 class SAM():
     """ Stochastic Action Modifier """
     def __init__(self):
-        pass
+        self.Fs = []
+        self.F_primes = []
+        self.R_hat = []
     def sigma(self, r_hat):
         """ Given the internal reinforcement from time step t - 1 """
         return math.exp(r_hat)
-    def F_prime(self, F, r_hat):
+    def F_prime(self, t):
         """ The actual recommended action to be applied to the system. """
-        mu = F
-        sigma = self.sigma(r_hat)
+        mu = self.Fs[t]
+        sigma = self.sigma(self.R_hat[t - 1])
         samples = 1
-        return np.random.normal(mu, sigma, samples)
-    def s(self, F, r_hat):
-        """ perturbation """
-        return (self.F_prime(F, r_hat) - F) / self.sigma(r_hat)
+        return np.random.normal(mu, sigma, samples)[0]
+    def s(self, t):
+        """ Calculates the perturbation at each time step and is simply
+        the normalized deviation from the action selection network's 
+        recommended action. """
+        return (self.F_prime(t) - self.Fs[t]) / self.sigma(self.R_hat[t - 1])
     
 class Term():
     """ a linguistic term for a linguistic variable """
@@ -348,4 +397,15 @@ while True:
     print(rules[0].degreeOfApplicability(2, state))
     break
 
-print(asn.forward(state))
+asn.X.append(state)
+print(asn.forward(0))
+print(asn.dF_dpV())
+print(len(asn.dF_dpV()))
+
+sam = SAM()
+
+eta = 0.3
+t = 0
+sam.R_hat = aen.R_hat
+sam.Fs = [asn.forward(0), asn.forward(0)]
+pV = eta * sam.s(t) * aen.R_hat[t] * np.sign(asn.backpropagation(aen, t))
