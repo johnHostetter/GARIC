@@ -13,25 +13,30 @@ import numpy as np
 class GARIC():
     """ Generalized Approximate Reasoning Intelligent Controller """
     def __init__(self, inputVariables, outputVariables, rules, h):
-        self.aen = AEN(len(inputVariables), h)
-        self.asn = ASN(inputVariables, outputVariables, rules)
-        self.sam = SAM()
+        self.X = [] # the history of visited states
+        self.R = [] # the history of actual rewards, r
+        self.R_hat = [] # the history of internal reinforcements, r^
+        self.Fs = [] # the history of recommended actions, F
+        self.F_primes = [] # the history of actual actions, F'
+        self.aen = AEN(self.X, self.R, self.R_hat, len(inputVariables), h)
+        self.asn = ASN(self.X, inputVariables, outputVariables, rules)
+        self.sam = SAM(self.Fs, self.F_primes, self.R_hat)
     def play(self, x):
         self.aen.X.append(x) # state at time step t + 1
         
 class AEN():
     """ Action Evaluation Network """
-    def __init__(self, n, h):
+    def __init__(self, X, R, R_hat, n, h):
+        self.X = X
+        self.R = R
+        self.R_hat = R_hat
         self.n = n # the number of inputs
         self.h = h # the number of neurons in the hidden layer
         self.beta = 0.5 # constant that is greater than zero
         self.gamma = 0.9 # discount rate between 0 and 1
-        self.X = [] # the history of visited states
         self.A = [] # the history of previous weights, a
         self.B = [] # the history of previous weights, b
         self.C = [] # the history of previous weights, c
-        self.R = [] # the history of actual rewards, r
-        self.R_hat = [] # the history of internal reinforcements, r^
         self.__weights(n, h)
     def __weights(self, n, h):
         """ Initializes all the weights in the action evaluation network 
@@ -106,8 +111,8 @@ class AEN():
     
 class ASN():
     """ Action Selection Network """
-    def __init__(self, inputVariables, outputVariables, rules):
-        self.X = []
+    def __init__(self, X, inputVariables, outputVariables, rules):
+        self.X = X
         self.k = 3.14 # the degree of hardness for softmin
         self.inputVariables = inputVariables
         self.outputVariables = outputVariables
@@ -245,10 +250,10 @@ class ASN():
 
 class SAM():
     """ Stochastic Action Modifier """
-    def __init__(self):
-        self.Fs = []
-        self.F_primes = []
-        self.R_hat = []
+    def __init__(self, Fs, F_primes, R_hat):
+        self.Fs = Fs
+        self.F_primes = F_primes
+        self.R_hat = R_hat
     def sigma(self, r_hat):
         """ Given the internal reinforcement from time step t - 1 """
         return math.exp(r_hat)
@@ -319,7 +324,7 @@ x = np.array([0.0]*(n + 1)) # plus one for the bias input
 for idx in range(n + 1):
     x[idx] = random.random()
     
-aen = AEN(n, h)
+aen = AEN([], [], [], n, h)
 aen.X.append(x)
 aen.X.append(x)
 aen.R.append(0)
@@ -386,7 +391,7 @@ rules = [
         Rule([vs1, vs2, ne3, ns4], [nvs])
         ]
 
-asn = ASN(inputVariables, outputVariables, rules)
+asn = ASN([], inputVariables, outputVariables, rules)
 state = None
 while True:
     state = np.array([0.0]*(4)) # plus one for the bias input
