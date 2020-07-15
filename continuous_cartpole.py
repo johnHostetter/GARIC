@@ -88,11 +88,11 @@ class ContinuousCartPoleEnv(gym.Env):
         done = bool(done)
 
         if not done:
-            reward = 1.0
+            reward = 1
         elif self.steps_beyond_done is None:
             # Pole just fell!
             self.steps_beyond_done = 0
-            reward = -1.0
+            reward = 1
         else:
             if self.steps_beyond_done == 0:
                 logger.warn("""
@@ -101,7 +101,7 @@ done = True. You should always call 'reset()' once you receive 'done = True'
 Any further steps are undefined behavior.
                 """)
             self.steps_beyond_done += 1
-            reward = 0.0
+            reward = 0
 
         return np.array(self.state), reward, done, {}
 

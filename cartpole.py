@@ -6,7 +6,7 @@ Created on Fri May 29 19:10:50 2020
 """
 
 import gym
-import random
+import math
 import numpy as np
 from garic import Term, Variable, Rule, GARIC
 from continuous_cartpole import ContinuousCartPoleEnv
@@ -66,12 +66,28 @@ rules = [
         Rule([vs1, vs2, ne3, ns4], [nvs])
         ]
 
-agent = GARIC(inputVariables, outputVariables, rules, 10)
+#rules = [
+#        Rule([po1, None, None, None], [pl]),
+#        Rule([po1, None, None, None], [pm]),
+#        Rule([po1, None, None, None], [ze]),
+#        Rule([ze1, None, None, None], [ps]),
+#        Rule([ze1, None, None, None], [ze]),
+#        Rule([ze1, None, None, None], [ns]),
+#        Rule([ne1, None, None, None], [ze]),
+#        Rule([ne1, None, None, None], [nm]),
+#        Rule([ne1, None, None, None], [nl]),
+#        Rule([vs1, None, po3, None], [ps]),
+#        Rule([vs1, None, po3, None], [pvs]),
+#        Rule([vs1, None, ne3, None], [ns]),
+#        Rule([vs1, None, ne3, None], [nvs])
+#        ]
+
+agent = GARIC(inputVariables, outputVariables, rules, 5)
 
 #env = gym.make("CartPole-v1")
 env = ContinuousCartPoleEnv()
-env.min_action = -float('inf')
-env.max_action = float('inf')
+env.min_action = -100
+env.max_action = 100
 env.action_space = gym.spaces.Box(
     low=env.min_action,
     high=env.max_action,
@@ -83,26 +99,48 @@ agent.X.append(observation) # GARIC observe the environment
 agent.R.append(0)
 agent.R_hat.append(0)
 t = 0
+time_up = 0
+total_r = 0
+episode = 0
+reset = True
+rewards = [] # a list where the ith element is the total reward obtained during the ith episode
 print(observation)
-for _ in range(10000):
+#for inputVariable in inputVariables:
+#    inputVariable.graph(-1.5,1.5)
+var0.graph(-0.51,0.51)
+var1.graph(-1.01,1.01)
+var2.graph(-0.4,0.4)
+var3.graph(-1.01,1.01)
+var4.graph()
+for _ in range(1000):
     env.render()
-    print('time-step: %s' % t)
 #    action = env.action_space.sample() # your agent here (this takes random actions)
     F = np.array([agent.action(t)], dtype='float32')
+#    print('apply %s force' % F)
     observation, reward, done, info = env.step(F)
-    observation[0] /= 100
-    observation[1] /= 1000 # normalize the velocities
-    observation[3] /= 1000 # normalize the velocities
-    observation[2] /= 100
+    observation[0] /= 4.8
+    observation[1] = np.tanh(observation[1])
+    observation[3] = np.tanh(observation[3])
+    observation[2] /= 140
     agent.X.append(observation) # GARIC observe the environment
     agent.R.append(reward) # GARIC observe the reward
-    agent.aen.r_hat(t, done) # GARIC determine internal reinforcement
+    agent.aen.r_hat(t, done, reset) # GARIC determine internal reinforcement
     agent.aen.backpropagation(t) # GARIC update weights on AEN
     agent.asn.backpropagation(agent.aen, agent.sam, t)
+    reset = False
     t += 1
-    print(reward)
+    time_up += 1
+    total_r += reward
+    
+#    for term in agent.asn.antecedents:
+#        print(term)
     
     if done:
         observation = env.reset()
-        print('reset')
+        print('time step %s: episode %s: total reward %s time up: %s' % (t, episode, total_r, time_up))
+        rewards.append(total_r)
+        episode += 1
+        time_up = 0
+        total_r = 0
+        reset = True
 env.close()
