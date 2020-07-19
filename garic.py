@@ -443,7 +443,7 @@ class ASN():
     #            print('BEFORE: ' + str([self.antecedents[i].label, self.antecedents[i].center, self.antecedents[i].rightSpread, self.antecedents[i].leftSpread]))
 #                print('dF_dmuV: %s' % self.dF_dmuV(antecedent))
 #                print('dmuV_dcV: %s' % self.dmuV_dcV(antecedent, x))
-                print('delta: %s' % (self.eta * sam.s(t) * self.R_hat[t] * self.dv_dF(aen, t) * self.dF_dmuV(antecedent) * self.dmuV_dcV(antecedent, x)))
+#                print('delta: %s' % (self.eta * sam.s(t) * self.R_hat[t] * self.dv_dF(aen, t) * self.dF_dmuV(antecedent) * self.dmuV_dcV(antecedent, x)))
                 self.antecedents[i].center += self.eta * sam.s(t) * self.R_hat[t] * self.dv_dF(aen, t) * self.dF_dmuV(antecedent) * self.dmuV_dcV(antecedent, x)
                 self.antecedents[i].rightSpread += self.eta * sam.s(t) * self.R_hat[t] * self.dv_dF(aen, t) * self.dF_dmuV(antecedent) * self.dmuV_dsVR(antecedent, x)
                 self.antecedents[i].leftSpread += self.eta * sam.s(t) * self.R_hat[t] * self.dv_dF(aen, t) * self.dF_dmuV(antecedent) * self.dmuV_dsVL(antecedent, x)
@@ -471,8 +471,8 @@ class SAM():
                 F_prime = np.random.normal(mu, 1/sigma, samples)[0]
             else:
 #                F_prime = np.random.normal(mu, self.upper, samples)[0] # temporary fix?
-                print('very bad')
-                F_prime = np.random.uniform(-1,1)
+                F_prime = np.random.normal(0, 1, samples)[0]
+#                F_prime = mu
 #        if F_prime < -25:
 #            F_prime = -25
 #        elif F_prime > 25:

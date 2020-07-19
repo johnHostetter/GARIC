@@ -46,6 +46,14 @@ class Variable():
         self.idx = idx # the corresponding input/output or feature of this variable
         self.terms = terms # the linguistic terms for which this linguistic variable is defined over
         self.label = label # the label of the linguistic variable
+    def find(self, label):
+        """ Find the linguistic term that matches the provided label. """
+        if '+' in label:
+            label = label.split(' + ')[0]
+        for term in self.terms:
+            if term.label == label:
+                return term
+        return None
     def graph(self, lower=-20, upper=20):
         for fuzzySet in self.terms:
             x_list = np.linspace(lower, upper, 1000)
@@ -74,6 +82,9 @@ class Rule():
         to the order of output indexes. """
         self.antecedents = antecedents
         self.consequents = consequents
+        self.weight = 1.0
+#        self.weight = np.random.random(1)[0]
+        self.active = True
     def degreeOfApplicability(self, k, inpts):
         """ Determines the degree of applicability for this rule. """
         mus = []
@@ -118,16 +129,23 @@ class GenericASN():
         self.Fs = Fs
         self.R_hat = R_hat
         self.k = 10 # the degree of hardness for softmin
-        self.eta = 0.01 # the learning rate
+        self.eta = 0.0025 # the learning rate
         self.inputVariables = inputVariables
         self.outputVariables = outputVariables
         self.antecedents = self.__antecedents() # generates the antecedents layer
         self.o1o2Weights = self.__o2() # assigns the weights between input layer and terms layer
-        self.rules = rules # generates the rules layer
+        self.rules = self.__activeRules(rules) # generates the rules layer
         self.o2o3Weights = self.__o3() # assigns the weights between antecedents layer and rules layer
         self.consequents = self.__consequents() # generates the consequents layer
         self.o3o4Weights = self.__o4() # assigns the weights between rules layer and consequents layer
         self.O4 = {}
+    def __activeRules(self, rules):
+        active_rules = []
+        for rule in rules:
+            if rule.active:
+                active_rules.append(rule)
+        return active_rules
+        
     def __antecedents(self):
         """ Generates the list of terms to be used in the second layer. """
         terms = []
@@ -174,6 +192,12 @@ class GenericASN():
                 if consequent in rule.consequents:
                     weights[row, col] = 1
         return weights
+    def updateRules(self, new_rules):
+        """ Change/update the rules used in the action selection network. """
+        self.rules = new_rules # generates the rules layer
+        self.o2o3Weights = self.__o3() # assigns the weights between antecedents layer and rules layer
+        self.consequents = self.__consequents() # generates the consequents layer
+        self.o3o4Weights = self.__o4() # assigns the weights between rules layer and consequents layer
     def forward(self, t):
         """ Completes a forward pass through the Action Selection Network
         provided a given input state. """
@@ -211,7 +235,10 @@ class GenericASN():
         
     def backpropagation(self, aen, sam, t, actual):
         # (1/2) tune consequents
-        dv_dF = (aen.v(t, t) - aen.v(t-1, t-1)) / (self.Fs[t] - self.Fs[t-1])
+        if (self.Fs[t] - self.Fs[t-1]) == 0: # divide by zero error is possible here, investigate why later
+            dv_dF = (aen.v(t, t) - aen.v(t-1, t-1))
+        else:
+            dv_dF = (aen.v(t, t) - aen.v(t-1, t-1)) / (self.Fs[t] - self.Fs[t-1])
         numerator = 0.0
         denominator = 0.0
         
@@ -248,6 +275,12 @@ class GenericASN():
         
 #        print(delta_4)
         delta_3 = delta_4
+        
+        
+        
+        
+        
+        
 #        print(delta_3)
 #        o2activation = copy.deepcopy(self.o1o2Weights)
 #        # layer 2
@@ -295,6 +328,21 @@ class GenericASN():
                         q_k = 0.0 # do nothing
                     
                     dE_da_i += q_k
+                    
+                    # --- TRYING SOMETHING NEW HERE ---
+        
+                    rule.weight = np.tanh(rule.weight + (self.eta * dE_da_i))
+                    
+                    if rule.weight >= -0.6:
+                        if not(rule.active):
+                            print('%sth rule dropping in' % k)
+                        rule.active = True
+                    else:
+                        if rule.active:
+                            print('%sth rule dropping out' % k)
+                        rule.active = False
+                    
+                    # --- END OF TRYING SOMETHING NEW HERE ---
                 
                 
                 
