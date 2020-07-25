@@ -13,6 +13,8 @@ from collections import Counter
 from statistics import stdev 
 from neurofuzzynetwork import Term, Variable, NFN_bellShapedMembership
 
+np.random.seed(0)
+
 class EmpiricalFuzzySet():
     def __init__(self, features):
         self.features = features
@@ -351,7 +353,7 @@ class EmpiricalFuzzySet():
     def compression(self, clouds, threshold, num_of_terms, terms, feature_idx):
         matrix = self.distMatrix(terms[feature_idx])
         similarity = self.identifySimilarPair(terms[feature_idx], matrix)
-        print('num of terms remaining: %s' % len(terms[feature_idx]))
+#        print('num of terms remaining: %s' % len(terms[feature_idx]))
         if len(terms[feature_idx]) > num_of_terms or similarity['distance'] < threshold:
             result = self.reduction(clouds, terms[feature_idx], similarity, feature_idx)
             if result == None:
@@ -375,7 +377,6 @@ class EmpiricalFuzzySet():
                         mu = self.gaussianMembership(x, c, sig)
                         x_lst.append(x)
                         mu_lst.append(mu)
-                plt.show()
         return variables
 
     def compress_variables(self, clouds, variables):
@@ -401,9 +402,9 @@ class EmpiricalFuzzySet():
                     mu = self.gaussianMembership(x, c, sig)
                     x_lst.append(x)
                     mu_lst.append(mu)
-                title = self.features[feature_idx]
-                self.plotDistribution(x_lst, mu_lst, title)
-            plt.show()
+#                title = self.features[feature_idx]
+#                self.plotDistribution(x_lst, mu_lst, title)
+#            plt.show()
 
     # trying to incorporate empirical fuzzy sets into neuro fuzzy networks
     

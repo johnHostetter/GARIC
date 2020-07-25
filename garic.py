@@ -11,6 +11,8 @@ import random
 import numpy as np
 import matplotlib.pyplot as plt
 
+np.random.seed(0)
+
 class GARIC():
     """ Generalized Approximate Reasoning Intelligent Controller """
     def __init__(self, inputVariables, outputVariables, rules, h, lower=-25, upper=25):

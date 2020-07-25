@@ -13,19 +13,21 @@ from ruleGeneration import update_rules
 from neurofuzzynetwork import eFL_ACC
 from continuous_cartpole import ContinuousCartPoleEnv
 
+np.random.seed(0)
+
 class Data():
     def __init__(self, X, V, aen):
         self.X = X
         self.V = V
         self.aen = aen
 
-def randomPlay():
+def randomPlay(seed):
     """ Generate random gameplay for initialization of learning method. """
     X = []
     V = [] # reward thus far
     
-    env = ContinuousCartPoleEnv()
-    env.seed(13)
+    env = ContinuousCartPoleEnv(seed)
+    env.seed = seed
     env.min_action = -1.0
     env.max_action = 1.0
     env.action_space = gym.spaces.Box(
@@ -33,6 +35,7 @@ def randomPlay():
         high=env.max_action,
         shape=(1,)
     )
+    env.action_space.seed(seed)
     
     steps = [] # observations for the current episode
     episodes = {}
@@ -95,19 +98,20 @@ def randomPlay():
     env.close()
     return Data(X, V, aen)
 
-def demo(aen, NFN_variables, rules, init_X, init_V, explore):
+def demo(aen, NFN_variables, rules, init_X, init_V, explore, seed):
     """ Demo of learning method. """
     agent = eFL_ACC(NFN_variables[:4], NFN_variables[4:], rules, 5, lower=-2, upper=2)    
 
-    env = ContinuousCartPoleEnv()
-    env.min_action = -100
-    env.max_action = 100
-    env.seed(20)
+    env = ContinuousCartPoleEnv(seed)
+    env.seed = seed
+    env.min_action = -100.0
+    env.max_action = 100.0
     env.action_space = gym.spaces.Box(
         low=env.min_action,
         high=env.max_action,
         shape=(1,)
     )
+    env.action_space.seed(seed)
     
     agent.aen = aen # testing loading up a pre-trained AEN
     aen.X = agent.X
@@ -141,8 +145,8 @@ def demo(aen, NFN_variables, rules, init_X, init_V, explore):
     rewards = []
     for _ in range(2000):
         env.render()
-        
         if episode % 20 == 0 and reset and t <= 2000 and len(rewards) > 0 and max(rewards) < 80: # every 10 to 20 episodes
+#        if episode % 10 == 0 and reset and t <= 2000 and len(rewards) > 0 and max(rewards) < 90: # every 10 to 20 episodes
             print('Updating fuzzy logic control rules...')
             
             

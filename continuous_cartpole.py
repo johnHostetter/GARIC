@@ -12,6 +12,7 @@ from gym import spaces, logger
 from gym.utils import seeding
 import numpy as np
 
+np.random.seed(0)
 
 class ContinuousCartPoleEnv(gym.Env):
     metadata = {
@@ -19,7 +20,7 @@ class ContinuousCartPoleEnv(gym.Env):
         'video.frames_per_second': 50
     }
 
-    def __init__(self):
+    def __init__(self, seed=None):
         self.gravity = 9.8
         self.masscart = 1.0
         self.masspole = 0.1
@@ -50,7 +51,7 @@ class ContinuousCartPoleEnv(gym.Env):
         )
         self.observation_space = spaces.Box(-high, high)
 
-        self.seed()
+        self.seed(seed) # initialize the random number generator with an optional seed
         self.viewer = None
         self.state = None
 

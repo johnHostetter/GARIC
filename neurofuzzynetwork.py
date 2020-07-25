@@ -11,6 +11,8 @@ import numpy as np
 from garic import AEN, SAM
 import matplotlib.pyplot as plt
 
+np.random.seed(0)
+
 def NFN_gaussianMembership(params, x):
     numerator = (-1) * pow(x - params['center'], 2)
     denominator = 2 * pow(params['sigma'], 2)

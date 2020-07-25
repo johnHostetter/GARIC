@@ -10,6 +10,8 @@ import copy
 import numpy as np
 from neurofuzzynetwork import Rule
 
+np.random.seed(0)
+
 def fuzzify(NFN_variables, x):
     """ Fuzzify an observation to its corresponding fuzzy regions. """
     new_x = {'str':[], 'obj':[]}
@@ -32,7 +34,7 @@ def rule_deg(fuzzy_observation, X, V):
     
     # following performs quite well alone - achieved 125 reward and mean 36
     
-    k = 1 # power of significance --- influences weight of rule value, 0.5 to 0.75 worked well
+    k = 1.0 # power of significance --- influences weight of rule value, 0.5 to 0.75 worked well
     summ = 0.0
     deg = 1.0
     for i in range(len(X)):
