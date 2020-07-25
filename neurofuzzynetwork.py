@@ -16,6 +16,16 @@ def NFN_gaussianMembership(params, x):
     denominator = 2 * pow(params['sigma'], 2)
     return pow(math.e, numerator / denominator)
 
+def NFN_bellShapedMembership(params, x):
+    f = -1 * pow((x - params['center']), 2) / pow(params['sigma'], 2)
+    return pow(math.e, f)
+
+#def NFN_leftSigmoidMembership(params, x):
+#    return 1 / (pow(math.e, np.abs(25/params['sigma']) * (x + params['center'])) + 1)
+#
+#def NFN_rightSigmoidMembership(params, x):
+#    return 1 / (pow(math.e, -np.abs(25/params['sigma']) * (x + params['center'])) + 1)
+
 class Term():
     """ a linguistic term for a linguistic variable """
     def __init__(self, var, function, params, support=None, label=None):
@@ -94,15 +104,6 @@ class Rule():
                 mu = antecedent.degree(inpts[idx])
                 mus.append(mu)
         return min(mus)
-#        numerator = 0.0
-#        denominator = 0.0
-#        for idx in range(len(inpts)):
-#            antecedent = self.antecedents[idx]
-#            if antecedent != None:
-#                mu = antecedent.degree(inpts[idx])
-#                numerator += mu * math.pow(math.e, (-k * mu))
-#                denominator += math.pow(math.e, (-k * mu))
-#        return numerator / denominator
     
 class eFL_ACC():
     """ Empirical Fuzzy Logic Actor Critic Controller """
@@ -115,10 +116,12 @@ class eFL_ACC():
         self.aen = AEN(self.X, self.R, self.R_hat, len(inputVariables), h)
         self.asn = GenericASN(self.X, self.Fs, self.R_hat, inputVariables, outputVariables, rules)
         self.sam = SAM(self.Fs, self.F_primes, self.R_hat, lower, upper)
-    def action(self, t):
+    def action(self, t, explore):
         F = self.asn.forward(t)
         self.Fs.append(F)
         F_prime = self.sam.F_prime(t)
+        if not(explore):
+            F_prime = F
         self.F_primes.append(F_prime)
         return F_prime
 
@@ -129,7 +132,8 @@ class GenericASN():
         self.Fs = Fs
         self.R_hat = R_hat
         self.k = 10 # the degree of hardness for softmin
-        self.eta = 0.0025 # the learning rate
+#        self.eta = 0.15 # the learning rate
+        self.eta = 0.05
         self.inputVariables = inputVariables
         self.outputVariables = outputVariables
         self.antecedents = self.__antecedents() # generates the antecedents layer
@@ -217,7 +221,6 @@ class GenericASN():
         # layer 4
         o4activation = np.array([0.0]*len(self.consequents))
         for col in range(len(self.consequents)):
-#            consequent = self.consequents[col]
             rulesIndexes = np.where(self.o3o4Weights[col]==1.0)[0] # get all rules that map to this consequent
             f = 0.0
             for row in rulesIndexes:
@@ -244,25 +247,23 @@ class GenericASN():
         
         o4activation = self.O4[t]
         
-#        for consequent in self.consequents:
         for idx in range(len(self.consequents)):
             u_i = o4activation[idx]
             consequent = self.consequents[idx]
             numerator += consequent.params['center'] * consequent.params['sigma'] * u_i
             denominator += consequent.params['sigma'] * u_i
-#        print('numerator %s' % numerator)
-#        print('denominator %s' % denominator)
-#        for consequent in self.consequents:
-        for idx in range(len(self.consequents)):
-#            print('CENTER BEFORE: %s' % (consequent.params['center']))
-            u_i = o4activation[idx]
-            consequent = self.consequents[idx]
-            consequent.params['center'] += self.eta * np.sign(dv_dF) * ((consequent.params['sigma'] * u_i) / denominator)
-#            print('CENTER AFTER: %s' % (consequent.params['center']))
-#            print('CENTER BEFORE: %s' % (consequent.params['sigma']))
-            consequent.params['sigma'] += self.eta * np.sign(dv_dF) * (((consequent.params['center'] * u_i * denominator) - (numerator * u_i)) / (pow(denominator, 2)))
-#            print('CENTER AFTER: %s' % (consequent.params['sigma']))
-#        print('DONE')
+        
+#        print('dv_dF: %s' % dv_dF)
+#        print('numerator: %s' % numerator)
+#        print('denominator: %s' % denominator)
+            
+#        for idx in range(len(self.consequents)):
+#            u_i = o4activation[idx]
+#            consequent = self.consequents[idx]
+#            consequent.params['center'] += self.eta * dv_dF * ((consequent.params['sigma'] * u_i) / denominator)
+#            consequent.params['sigma'] += self.eta * dv_dF * (((consequent.params['center'] * u_i * denominator) - (numerator * u_i)) / (pow(denominator, 2)))
+#            consequent.params['center'] += self.eta * np.sign(dv_dF) * ((consequent.params['sigma'] * u_i) / denominator)
+#            consequent.params['sigma'] += self.eta * np.sign(dv_dF) * (((consequent.params['center'] * u_i * denominator) - (numerator * u_i)) / (pow(denominator, 2)))
 
         # (2/2) tune antecedents
         
@@ -271,25 +272,11 @@ class GenericASN():
         for idx in range(len(self.consequents)):
             u_i = o4activation[idx]
             consequent = self.consequents[idx]
+            # correct, but causes large numbers
             delta_4[idx] = delta_5 * (((consequent.params['center'] * consequent.params['sigma'] * denominator) - (numerator * consequent.params['sigma'])) / (pow(denominator, 2)))
-        
-#        print(delta_4)
+#            delta_4[idx] = delta_5 * (((consequent.params['center'] * consequent.params['sigma'] * denominator) - (numerator * consequent.params['sigma'])) / (pow(denominator, 1)))
+
         delta_3 = delta_4
-        
-        
-        
-        
-        
-        
-#        print(delta_3)
-#        o2activation = copy.deepcopy(self.o1o2Weights)
-#        # layer 2
-#        for i in range(len(self.X[t])):
-#            o2 = np.where(self.o1o2Weights[i]==1.0)[0] # get all indexes that this input maps to
-#            for j in o2:
-#                antecedent = self.antecedents[j]
-#                deg = antecedent.degree(self.X[t][i])
-#                o2activation[i, j] = deg
                 
         for i in range(len(self.X[t])):
             x = self.X[t]
@@ -298,10 +285,8 @@ class GenericASN():
             for j in o2:
                 antecedent = self.antecedents[j]
                 a_i = antecedent.degree(u_i) # degree currently includes e^f, so this is actually activation function
-#                o2activation[i, j] = deg
                 delta_m_ij = a_i * (2 * (u_i - antecedent.params['center'])) / pow(antecedent.params['sigma'], 2)
                 delta_sigma_ij = a_i * pow((2 * (u_i - antecedent.params['center'])), 2) / pow(antecedent.params['sigma'], 3)
-                
                 
                 # calculate dE / da_i
                 
@@ -315,7 +300,6 @@ class GenericASN():
                     rule = self.rules[k]
                     deg = rule.degreeOfApplicability(self.k, self.X[t])
                     if deg == a_i:
-#                        dE_da_i = 1 # NOT CORRECT, JUST TESTING
                         # find the error of this rule's consequence
                         
                         # find the consequent's index of this rule
@@ -331,22 +315,23 @@ class GenericASN():
                     
                     # --- TRYING SOMETHING NEW HERE ---
         
-                    rule.weight = np.tanh(rule.weight + (self.eta * dE_da_i))
-                    
-                    if rule.weight >= -0.6:
-                        if not(rule.active):
-                            print('%sth rule dropping in' % k)
-                        rule.active = True
-                    else:
-                        if rule.active:
-                            print('%sth rule dropping out' % k)
-                        rule.active = False
+#                    rule.weight = np.tanh(rule.weight + (self.eta * dE_da_i))
+#                    
+#                    if rule.weight >= 0:
+##                        if not(rule.active):
+##                            print('%sth rule dropping in' % k)
+#                        rule.active = True
+#                    else:
+##                        if rule.active:
+##                            print('%sth rule dropping out' % k)
+#                        rule.active = False
                     
                     # --- END OF TRYING SOMETHING NEW HERE ---
                 
-                
-                
-                
                 # UPDATE THE WEIGHTS
-                antecedent.params['center'] += self.eta * dE_da_i * delta_m_ij
-                antecedent.params['sigma'] += self.eta * dE_da_i * delta_sigma_ij
+#                print('dE_da_i %s' % dE_da_i)
+#                print('delta_m_ij %s' % delta_m_ij)
+#                print('change of %s center = %s' % (antecedent.label, self.eta * dE_da_i * delta_m_ij))
+#                antecedent.params['center'] += self.eta * dE_da_i * delta_m_ij
+#                antecedent.params['sigma'] += self.eta * dE_da_i * delta_sigma_ij
+#                print('c = %s , sigma = %s' % (antecedent.params['center'], antecedent.params['sigma']))
