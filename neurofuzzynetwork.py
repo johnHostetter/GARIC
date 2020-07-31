@@ -30,7 +30,7 @@ def NFN_bellShapedMembership(params, x):
 
 class Term():
     """ a linguistic term for a linguistic variable """
-    def __init__(self, var, function, params, support=None, label=None):
+    def __init__(self, var, function, params, support=None, label=None, var_label=None):
         """ The 'var' parameter allows this linguistic term to be 
         traced back to its corresponding linguistic variable. 
         The parameter 'function' allows the linguistic term
@@ -46,6 +46,9 @@ class Term():
         self.params = params # the corresponding parameters to the membership function
         self.support = support
         self.label = label # the label of the linguistic term
+        self.var_label = var_label # the label of the linguistic term's corresponding variable
+    def __str__(self):
+        return '%s IS %s' % (self.var_label, self.label)
     def degree(self, x):
         """ degree of membership using triangular membership function """
         return self.function(self.params, x)
@@ -97,6 +100,21 @@ class Rule():
         self.weight = 1.0
 #        self.weight = np.random.random(1)[0]
         self.active = True
+    def __str__(self):
+        text = 'IF '
+        for i in range(len(self.antecedents)):
+            antecedent = self.antecedents[i]
+            text += str(antecedent)
+            if i + 1 == len(self.antecedents):
+                text += ', THEN '
+            else:
+                text += ', AND ' 
+        for i in range(len(self.consequents)):
+            consequent = self.consequents[i]
+            text += str(consequent)
+            if i + 1 < len(self.consequents):
+                text += ', '
+        return text
     def degreeOfApplicability(self, k, inpts):
         """ Determines the degree of applicability for this rule. """
         mus = []
@@ -106,6 +124,8 @@ class Rule():
                 mu = antecedent.degree(inpts[idx])
                 mus.append(mu)
         return min(mus)
+    def lst(self):
+        return self.antecedents + self.consequents
     
 class eFL_ACC():
     """ Empirical Fuzzy Logic Actor Critic Controller """
@@ -135,7 +155,9 @@ class GenericASN():
         self.R_hat = R_hat
         self.k = 10 # the degree of hardness for softmin
 #        self.eta = 0.15 # the learning rate
-        self.eta = 0.05
+#        self.eta = 0.0000000005 # achieved 186 reward
+#        self.eta = 75e-12
+        self.eta = 25e-12
         self.inputVariables = inputVariables
         self.outputVariables = outputVariables
         self.antecedents = self.__antecedents() # generates the antecedents layer
@@ -145,13 +167,21 @@ class GenericASN():
         self.consequents = self.__consequents() # generates the consequents layer
         self.o3o4Weights = self.__o4() # assigns the weights between rules layer and consequents layer
         self.O4 = {}
+    def __str__(self):
+        text = 'There are %s rules in the action selection network:\n\n' % (len(self.rules))
+        for i in range(len(self.rules)):
+            rule = self.rules[i]
+            text += '%s. ' % (i + 1)
+            text += str(rule)
+            if i + 1 != len(self.rules):
+                text += '\n\n'
+        return text
     def __activeRules(self, rules):
         active_rules = []
         for rule in rules:
             if rule.active:
                 active_rules.append(rule)
         return active_rules
-        
     def __antecedents(self):
         """ Generates the list of terms to be used in the second layer. """
         terms = []
@@ -197,7 +227,7 @@ class GenericASN():
                 consequent = self.consequents[col]
                 if consequent in rule.consequents:
                     weights[row, col] = 1
-        return weights
+        return weights            
     def updateRules(self, new_rules):
         """ Change/update the rules used in the action selection network. """
         self.rules = new_rules # generates the rules layer
@@ -236,8 +266,7 @@ class GenericASN():
             f += (self.consequents[idx].params['center'] * self.consequents[idx].params['sigma'] * o4activation[idx])
             denominator += (self.consequents[idx].params['sigma'] * o4activation[idx])
         a = f / denominator
-        return a
-        
+        return a    
     def backpropagation(self, aen, sam, t, actual):
         # (1/2) tune consequents
         if (self.Fs[t] - self.Fs[t-1]) == 0: # divide by zero error is possible here, investigate why later
@@ -259,13 +288,13 @@ class GenericASN():
 #        print('numerator: %s' % numerator)
 #        print('denominator: %s' % denominator)
             
-#        for idx in range(len(self.consequents)):
-#            u_i = o4activation[idx]
-#            consequent = self.consequents[idx]
+        for idx in range(len(self.consequents)):
+            u_i = o4activation[idx]
+            consequent = self.consequents[idx]
 #            consequent.params['center'] += self.eta * dv_dF * ((consequent.params['sigma'] * u_i) / denominator)
 #            consequent.params['sigma'] += self.eta * dv_dF * (((consequent.params['center'] * u_i * denominator) - (numerator * u_i)) / (pow(denominator, 2)))
-#            consequent.params['center'] += self.eta * np.sign(dv_dF) * ((consequent.params['sigma'] * u_i) / denominator)
-#            consequent.params['sigma'] += self.eta * np.sign(dv_dF) * (((consequent.params['center'] * u_i * denominator) - (numerator * u_i)) / (pow(denominator, 2)))
+            consequent.params['center'] += self.eta * np.sign(dv_dF) * ((consequent.params['sigma'] * u_i) / denominator)
+            consequent.params['sigma'] += self.eta * np.sign(dv_dF) * (((consequent.params['center'] * u_i * denominator) - (numerator * u_i)) / (pow(denominator, 2)))
 
         # (2/2) tune antecedents
         
@@ -334,6 +363,6 @@ class GenericASN():
 #                print('dE_da_i %s' % dE_da_i)
 #                print('delta_m_ij %s' % delta_m_ij)
 #                print('change of %s center = %s' % (antecedent.label, self.eta * dE_da_i * delta_m_ij))
-#                antecedent.params['center'] += self.eta * dE_da_i * delta_m_ij
-#                antecedent.params['sigma'] += self.eta * dE_da_i * delta_sigma_ij
+                antecedent.params['center'] += self.eta * dE_da_i * delta_m_ij
+                antecedent.params['sigma'] += self.eta * dE_da_i * delta_sigma_ij
 #                print('c = %s , sigma = %s' % (antecedent.params['center'], antecedent.params['sigma']))

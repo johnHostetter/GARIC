@@ -16,207 +16,211 @@ from continuous_cartpole import ContinuousCartPoleEnv
 np.random.seed(0)
 
 class Data():
-    def __init__(self, X, V, aen):
+    def __init__(self, X, aen, episodes):
         self.X = X
-        self.V = V
         self.aen = aen
+        self.episodes = episodes        
+        
+def normalization(observation):
+    for i in range(len(observation)): 
+        observation[i] = np.tanh(observation[i])
+    return observation
 
-def randomPlay(seed):
-    """ Generate random gameplay for initialization of learning method. """
-    X = []
-    V = [] # reward thus far
-    
-    env = ContinuousCartPoleEnv(seed)
-    env.seed = seed
-    env.min_action = -1.0
-    env.max_action = 1.0
-    env.action_space = gym.spaces.Box(
-        low=env.min_action,
-        high=env.max_action,
-        shape=(1,)
-    )
-    env.action_space.seed(seed)
-    
-    steps = [] # observations for the current episode
-    episodes = {}
-    time_to_episodes = {}
-    episode_ctr = 0 # counter for which episode the environment is currently on
-    total_reward = 0.0 # total reward for this episode so far
-    observation = env.reset()
-    
-    reset = True
+def addActionToObservation(observation, action):
+    """ Append the action to the observation. """
+    observation = list(observation)
+    observation.append(action[0])
+    observation = np.array(observation)
+    return observation
+
+def initAEN(observation):
     aen = AEN([], [], [], 4, h=5)
     aen.X.append(observation) # GARIC observe the environment
     aen.R.append(0)
     aen.R_hat.append(0)
-    
-    for t in range(200):
-        env.render()
-        action = env.action_space.sample() # your agent here (this takes random actions)
-        observation, reward, done, info = env.step(action)
-        observation[0] = np.tanh(observation[0])
-        observation[1] = np.tanh(observation[1])
-        observation[3] = np.tanh(observation[3])
-        observation[2] = np.tanh(observation[2])
-        
-        # add force to observation
-        observation = list(observation)
-        observation.append(action[0])
-        observation = np.array(observation)
-        X.append(np.array(observation))
-        V.append(total_reward)
-        
-        # add to AEN
-        aen.X.append(observation) # GARIC observe the environment
-        aen.R.append(reward) # GARIC observe the reward
-        aen.r_hat(t, done, reset) # GARIC determine internal reinforcement
-        aen.backpropagation(t) # GARIC update weights on AEN
-        
-        # add to episode history
-        total_reward += reward
-        steps.append(observation)
-        time_to_episodes[t] = episode_ctr
-        
-        reset = False
-        if done:
-            avg_reward = total_reward / len(steps)
-            episodes[episode_ctr] = {'steps':steps, 'value':avg_reward}
-            observation = env.reset()
-            total_reward = 0.0
-            episode_ctr += 1
-            steps = []
-            reset = True
-            
-    if not(done):
-        avg_reward = total_reward / len(steps)
-        episodes[episode_ctr] = {'steps':steps, 'value':avg_reward}
-        observation = env.reset()
-        total_reward = 0.0
-        episode_ctr += 1
-        steps = []
-    
-    env.close()
-    return Data(X, V, aen)
+    return aen
 
-def demo(aen, NFN_variables, rules, init_X, init_V, explore, seed):
-    """ Demo of learning method. """
-    agent = eFL_ACC(NFN_variables[:4], NFN_variables[4:], rules, 5, lower=-2, upper=2)    
+def updateAEN(aen, t, observation, reward, done, reset):
+    """ Update AEN only for demo random play. """
+    aen.X.append(observation) # GARIC observe the environment
+    aen.R.append(reward) # GARIC observe the reward
+    aen.r_hat(t, done, reset) # GARIC determine internal reinforcement
+    aen.backpropagation(t) # GARIC update weights on AEN
+    return aen
 
+def loadAEN(agent, aen):
+    agent.aen = aen # testing loading up a pre-trained AEN
+    aen.X = agent.X
+    aen.R = agent.R
+    aen.R_hat = agent.R_hat
+    return agent
+
+def initAgent(agent, observation):
+    agent.X.append(observation) # GARIC observe the environment
+    agent.R.append(0)
+    agent.R_hat.append(0)
+    return agent
+
+def updateAgent(agent, t, observation, reward, done, reset, F, backpropagate):
+    agent.X.append(observation) # GARIC observe the environment
+    agent.R.append(reward) # GARIC observe the reward
+    agent.aen.r_hat(t, done, reset) # GARIC determine internal reinforcement
+    agent.aen.backpropagation(t) # GARIC update weights on AEN
+    if backpropagate:
+        agent.asn.backpropagation(agent.aen, agent.sam, t, F)
+    return agent
+        
+def initEnv(seed, min_action, max_action):
     env = ContinuousCartPoleEnv(seed)
     env.seed = seed
-    env.min_action = -100.0
-    env.max_action = 100.0
+    env.min_action = min_action
+    env.max_action = max_action
     env.action_space = gym.spaces.Box(
         low=env.min_action,
         high=env.max_action,
         shape=(1,)
     )
     env.action_space.seed(seed)
-    
-    agent.aen = aen # testing loading up a pre-trained AEN
-    aen.X = agent.X
-    aen.R = agent.R
-    aen.R_hat = agent.R_hat
-    
-    observation = env.reset()
-    agent.X.append(observation) # GARIC observe the environment
-    agent.R.append(0)
-    agent.R_hat.append(0)
-    
-    t = 0
-    time_up = 0
-    total_r = 0
-    episode = 0
-    t_to_episode = {}
-    episode_vals = {}
-    reset = True
-    for idx in range(5):
+    return env
+
+def graph(NFN_variables):
+    for idx in range(len(NFN_variables)):
         NFN_variables[idx].graph(-1,1)
-        
-    new_V = []
-    
+
+def prompt():
     print('--- Demo of exploration and fine tuning of membership functions ---')
     print('continue?')
     input()
     
-    observations = []
-        
-    print(observation)
+def randomPlay(seed):
+    """ Generate random gameplay for initialization of learning method. """
+    X = []
+    steps = []
+    env = initEnv(seed, -1, 1)
+    observation = env.reset()
+    reset = True
+    
+    episodes = []
+    time_to_episodes = {}
+    total_reward = 0.0 # total reward for this episode so far
+    
+    aen = initAEN(observation)
+    
     rewards = []
-    for _ in range(2000):
+    for t in range(200):
         env.render()
-        if episode % 20 == 0 and reset and t <= 2000 and len(rewards) > 0 and max(rewards) < 80: # every 10 to 20 episodes
-#        if episode % 10 == 0 and reset and t <= 2000 and len(rewards) > 0 and max(rewards) < 90: # every 10 to 20 episodes
-            print('Updating fuzzy logic control rules...')
-            
-            
-            test_V = []
-            
-            for i in range(len(t_to_episode)):
-                test_V.append(episode_vals[t_to_episode[i]])
-            
-            total_X = copy.deepcopy(init_X)
-            total_X.extend(observations)
-            total_V = copy.deepcopy(init_V)
-            total_V.extend(test_V)
-            rules = update_rules(NFN_variables, total_X[-3000:], total_V[-3000:])
-            agent.asn.updateRules(rules)
-    
-        F = agent.action(t, explore)
+        action = env.action_space.sample() # your agent here (this takes random actions)
+        observation, reward, done, info = env.step(action)
+        observation = normalization(observation)
+        observation = addActionToObservation(observation, action)
+        aen = updateAEN(aen, t, observation, reward, done, reset)
         
-        temp = list(observation)
-        temp.append(F)
-        observations.append(temp)
-        
-        t_to_episode[t] = episode
-    
-        action = np.array([F], dtype='float32')    
-        
-        try:
-            observation, reward, done, info = env.step(action)
-        except AssertionError:
-            # outside of valid range
-            print('assertion error')
-            done = True
-            observation = env.reset()
-            print('time step %s: episode %s: total reward %s time up: %s' % (t, episode, total_r, time_up))
-            rewards.append(total_r)
-            episode_vals[episode] = total_r
-            episode += 1
-            time_up = 0
-            total_r = 0
-            reset = True
-        # full tanh normalization resulted in mean of 23.65 and max of 76 with rule update cutoff at score of 60
-        observation[0] = np.tanh(observation[0])
-        observation[1] = np.tanh(observation[1])
-        observation[3] = np.tanh(observation[3])
-        observation[2] = np.tanh(observation[2])
-        agent.X.append(observation) # GARIC observe the environment
-        agent.R.append(reward) # GARIC observe the reward
-        agent.aen.r_hat(t, done, reset) # GARIC determine internal reinforcement
-        agent.aen.backpropagation(t) # GARIC update weights on AEN
-        if len(rewards) > 0 and max(rewards) >= 60:
-            agent.asn.backpropagation(agent.aen, agent.sam, t, F)
+        # add to episode history
+        total_reward += reward
+        X.append(observation)
+        steps.append(observation)
+        time_to_episodes[t] = len(episodes)
+
         reset = False
-        t += 1
-        time_up += 1
-        total_r += reward
-        
-        new_V.append(total_r)
-        
         if done:
             observation = env.reset()
-            print('time step %s: episode %s: total reward %s time up: %s' % (t, episode, total_r, time_up))
-            rewards.append(total_r)
-            episode_vals[episode] = total_r
-            episode += 1
-            time_up = 0
-            total_r = 0
+            episodes.append(steps)
+            rewards.append(total_reward)
+            total_reward = 0.0
+            steps = []
             reset = True
+            
+    if not(done):
+        observation = env.reset()
+        episodes.append(steps)
+        total_reward = 0.0
+        steps = []
+        reset = True
+    
+    env.close()
+    return Data(X, aen, episodes)
+
+def demo(aen, NFN_variables, rules, data, explore, seed):
+    """ Demo of learning method. """
+    X = []
+    steps = []
+    agent = eFL_ACC(NFN_variables[:4], NFN_variables[4:], rules, 5, lower=-2, upper=2)    
+    env = initEnv(seed, -100, 100)
+    observation = env.reset()
+    reset = True
+    done = False
+    
+    agent = loadAEN(agent, aen)
+    agent = initAgent(agent, observation)
+    
+    episodes = []
+    time_to_episodes = {}
+    total_reward = 0.0 # total reward for this episode so far
+
+        
+    graph(NFN_variables)
+    prompt()
+            
+    rewards = []
+    backpropagate = True
+    for t in range(2000):
+        env.render()
+#        if done and len(episodes) % 5 == 0 and not(backpropagate):
+#            print('Updating fuzzy logic control rules...')
+#            total_episodes = copy.deepcopy(episodes)
+#            total_episodes.extend(data.episodes)
+#            rules = update_rules(NFN_variables, total_episodes, rules)
+#            agent.asn.updateRules(rules)
+    
+        F = agent.action(t, explore)
+        action = np.array([F], dtype='float32')    
+        observation, reward, done, info = env.step(action)
+
+        # full tanh normalization resulted in mean of 23.65 and max of 76 with rule update cutoff at score of 60
+        observation = normalization(observation)
+        
+        # add to episode history
+        total_reward += reward
+        X.append(observation)
+        steps.append(observation)
+        time_to_episodes[t] = len(episodes)
+        
+#        observation = addActionToObservation(observation, action)
+#        if t == 3000:
+#            backpropagate = True
+        agent = updateAgent(agent, t, observation, reward, done, reset, F, backpropagate)
+        
+        reset = False
+        if done:
+            observation = env.reset()
+            print('time step %s: episode %s: total reward %s' % (t, len(episodes), total_reward))
+            episodes.append(steps)
+            rewards.append(total_reward)
+            total_reward = 0.0
+            steps = []
+            reset = True
+
+#        if done:
+##            avg_reward = total_reward / len(steps)
+#            episodes[episode_ctr] = {'steps':steps, 'value':total_reward}
+#            observation = env.reset()
+#            total_reward = 0.0
+#            episode_ctr += 1
+#            steps = []
+#            reset = True
+#            
+#    if not(done):
+##        avg_reward = total_reward / len(steps)
+#        episodes[episode_ctr] = {'steps':steps, 'value':total_reward}
+#        observation = env.reset()
+#        total_reward = 0.0
+#        episode_ctr += 1
+#        steps = []
+
     env.close()
     print('Max reward: %s' % max(rewards))
     print('Mean reward: %s' % np.mean(rewards))
-    return agent.X
+    return Data(agent.X, agent.aen, episodes), agent
     
 def playback(X):
     print('Playback of events...')

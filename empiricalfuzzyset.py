@@ -107,7 +107,7 @@ class EmpiricalFuzzySet():
         plt.plot(X, Y, 'o', color='blue')
         plt.legend()
         
-    def main(self, data):
+    def objectiveMethod(self, data):
         #X.sort()
         #U, F = unique(X)
         U = data.X
@@ -280,9 +280,13 @@ class EmpiricalFuzzySet():
             except KeyError:
                 clouds[min_idx] = []
                 clouds[min_idx].append(x)
-        
+                        
         # additional steps required
         variables = self.make_variables(data, p0, clouds)
+        return variables, clouds
+    
+    def main(self, data):
+        variables, clouds = self.objectiveMethod(data)
         self.compress_variables(clouds, variables)
         NFN_variables = self.make_NFN_variables(variables)
         return NFN_variables
@@ -410,7 +414,7 @@ class EmpiricalFuzzySet():
     
     def make_NFN_variables(self, variables):
         NFN_variables = [] # variables meant for the neuro fuzzy network
-        term_labels = ['Very Low', 'Low', 'Moderate', 'High', 'Very High', 'A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', 'N', 'O', 'P']
+        term_labels = ['Very Negative', 'Negative', 'Slightly Negative', 'Moderate', 'Slightly Positive', 'Positive', 'Very Positive']
         all_terms = []
         for var_key in variables.keys():
             idx = var_key
@@ -425,7 +429,7 @@ class EmpiricalFuzzySet():
                 params = {'center':c, 'sigma':sig}
                 term_label = term_labels[term_label_idx]
                 
-                term = Term(var_key, NFN_bellShapedMembership, params, sup, term_label)
+                term = Term(var_key, NFN_bellShapedMembership, params, sup, term_label, var_label)
                 
                 term_label_idx += 1
                 terms.append(term)

@@ -48,26 +48,32 @@ def rule_deg(fuzzy_observation, X, V):
         summ += (deg * norm_v)
     return summ / len(X)
 
-def make_rules_dictionary(NFN_Variables, X, V):
+def make_rules_dictionary(NFN_Variables, episodes):
     rules_dictionary = {}
-    for i in range(len(X)):
-        x = X[i]
-        v = V[i]
-        new_x = fuzzify(NFN_Variables, x)
-        key = ' - '.join(new_x['str'][:4])
-        value = ' - '.join(new_x['str'][4:])
-        try:
-            rules_dictionary[key]['set'].add(value)
-            rules_dictionary[key]['X'].append(x)
-            rules_dictionary[key]['V'].append(v)
-        except KeyError:
-            rules_dictionary[key] = {'set':set(), 'X':[], 'V':[]}
-            rules_dictionary[key]['set'].add(value)
-            rules_dictionary[key]['X'].append(x)
-            rules_dictionary[key]['V'].append(v)
+    for episode in episodes:
+        for i in range(len(episode)):
+            x = episode[i]
+            v = len(episode)
+            new_x = fuzzify(NFN_Variables, x)
+            key = ' - '.join(new_x['str'][:4])
+            value = ' - '.join(new_x['str'][4:])
+            try:
+                rules_dictionary[key]['set'].add(value)
+                rules_dictionary[key]['X'].append(x)
+                rules_dictionary[key]['V'].append(v)
+            except KeyError:
+                rules_dictionary[key] = {'set':set(), 'X':[], 'V':[]}
+                rules_dictionary[key]['set'].add(value)
+                rules_dictionary[key]['X'].append(x)
+                rules_dictionary[key]['V'].append(v)
     return rules_dictionary
 
-def filter_rules(NFN_variables, rules_dictionary, X):
+def filter_rules(NFN_variables, rules_dictionary, rules=None):
+    
+    previous_rules = []
+    if rules != None:
+        for rule in rules:
+            previous_rules.append(rule.lst())
     
     # to determine the threshold, perform the following:
     max_degs = []
@@ -99,6 +105,14 @@ def filter_rules(NFN_variables, rules_dictionary, X):
     print('set: %s' % len(set(max_degs)))
     print('max: %s' % max(set(max_degs)))
 #    threshold = max(max_degs) * 0.5
+    
+    
+    
+    
+    
+    
+    
+    
     max_degs = max_degs[-n:]
     threshold = min(max_degs)
     print('threshold: %s' % threshold) 
@@ -120,10 +134,78 @@ def filter_rules(NFN_variables, rules_dictionary, X):
                 rule.append(NFN_variables[var_idx].find(str_term))
                 var_idx += 1
             deg = rule_deg(rule, rules_dictionary[key]['X'], rules_dictionary[key]['V'])
+#            if deg > max_rule_deg:
             if deg > max_rule_deg:
                 max_rule_deg = deg
                 max_rule = rule
-        if max_rule_deg > threshold:
+        if max_rule_deg > threshold or max_rule in previous_rules:
+            fuzzy_rules.append(max_rule)
+    return fuzzy_rules
+
+def filter_rules_1(NFN_variables, rules_dictionary, rules=None):
+    
+    previous_rules = []
+    if rules != None:
+        for rule in rules:
+            previous_rules.append(rule.lst())
+    
+    # to determine the threshold, perform the following:
+    max_degs = []
+    for key in rules_dictionary.keys():
+        antecedents = key.split(' - ')
+        max_rule = None
+        max_rule_deg = 0.0
+        consequents = set(rules_dictionary[key]['set'])
+        for consequent in consequents:
+            str_rule = copy.deepcopy(antecedents)
+            str_rule.append(consequent)
+            rule = []
+            var_idx = 0
+            for str_term in str_rule:
+                rule.append(NFN_variables[var_idx].find(str_term))
+                var_idx += 1
+            deg = rule_deg(rule, rules_dictionary[key]['X'], rules_dictionary[key]['V'])
+            if deg > max_rule_deg and not(rule in previous_rules):
+                max_rule_deg = deg
+                max_rule = rule
+        max_degs.append(max_rule_deg)
+    
+    
+    
+#     determining threshold size
+    max_degs = sorted(max_degs)
+    n = math.floor(len(max_degs)/4)
+    print('potential rules: %s' % len(max_degs))
+    print('set: %s' % len(set(max_degs)))
+    print('max: %s' % max(set(max_degs)))
+#    threshold = max(max_degs) * 0.5
+    
+    max_degs = max_degs[-1:]
+    threshold = min(max_degs)
+    print('threshold: %s' % threshold) 
+    
+    
+#    threshold = 0.1 # a parameter, 0.1 worked well and got 125 max reward
+    fuzzy_rules = previous_rules
+    for key in rules_dictionary.keys():
+        antecedents = key.split(' - ')
+        max_rule = None
+        max_rule_deg = 0.0
+        consequents = set(rules_dictionary[key]['set'])
+        for consequent in consequents:
+            str_rule = copy.deepcopy(antecedents)
+            str_rule.append(consequent)
+            rule = []
+            var_idx = 0
+            for str_term in str_rule:
+                rule.append(NFN_variables[var_idx].find(str_term))
+                var_idx += 1
+            deg = rule_deg(rule, rules_dictionary[key]['X'], rules_dictionary[key]['V'])
+#            if deg > max_rule_deg:
+            if deg > max_rule_deg:
+                max_rule_deg = deg
+                max_rule = rule
+        if max_rule_deg > threshold and not(max_rule in fuzzy_rules):
             fuzzy_rules.append(max_rule)
     return fuzzy_rules
 
@@ -133,12 +215,14 @@ def create_rules(fuzzy_rules):
         rules.append(Rule(fuzzy_rule[:4], fuzzy_rule[4:]))
     return rules
 
-def update_rules(NFN_variables, X, V):
-    rules_dictionary = make_rules_dictionary(NFN_variables, X, V)
-    fuzzy_rules = filter_rules(NFN_variables, rules_dictionary, X)
-    return create_rules(fuzzy_rules)[0:25]
+def update_rules(NFN_variables, episodes, rules):
+    print('Previous # of rules = %s' % len(rules))
+    rules_dictionary = make_rules_dictionary(NFN_variables, episodes)
+    fuzzy_rules = filter_rules_1(NFN_variables, rules_dictionary, rules)
+    print('Current # of rules = %s' % len(fuzzy_rules))
+    return create_rules(fuzzy_rules)
 
-def init_rules(NFN_variables, X, V):
-    rules_dictionary = make_rules_dictionary(NFN_variables, X, V)
-    rules = create_rules(filter_rules(NFN_variables, rules_dictionary, X))
-    return rules
+def init_rules(NFN_variables, episodes):
+    rules_dictionary = make_rules_dictionary(NFN_variables, episodes)
+    fuzzy_rules = filter_rules(NFN_variables, rules_dictionary)
+    return create_rules(fuzzy_rules)
