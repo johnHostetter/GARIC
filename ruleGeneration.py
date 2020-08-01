@@ -6,7 +6,7 @@ Created on Fri Jul 24 19:27:59 2020
 """
 
 import math
-import copy
+from copy import copy, deepcopy
 import numpy as np
 from neurofuzzynetwork import Rule
 
@@ -83,7 +83,7 @@ def filter_rules(NFN_variables, rules_dictionary, rules=None):
         max_rule_deg = 0.0
         consequents = set(rules_dictionary[key]['set'])
         for consequent in consequents:
-            str_rule = copy.deepcopy(antecedents)
+            str_rule = deepcopy(antecedents)
             str_rule.append(consequent)
             rule = []
             var_idx = 0
@@ -126,7 +126,7 @@ def filter_rules(NFN_variables, rules_dictionary, rules=None):
         max_rule_deg = 0.0
         consequents = set(rules_dictionary[key]['set'])
         for consequent in consequents:
-            str_rule = copy.deepcopy(antecedents)
+            str_rule = deepcopy(antecedents)
             str_rule.append(consequent)
             rule = []
             var_idx = 0
@@ -157,7 +157,7 @@ def filter_rules_1(NFN_variables, rules_dictionary, rules=None):
         max_rule_deg = 0.0
         consequents = set(rules_dictionary[key]['set'])
         for consequent in consequents:
-            str_rule = copy.deepcopy(antecedents)
+            str_rule = deepcopy(antecedents)
             str_rule.append(consequent)
             rule = []
             var_idx = 0
@@ -193,7 +193,7 @@ def filter_rules_1(NFN_variables, rules_dictionary, rules=None):
         max_rule_deg = 0.0
         consequents = set(rules_dictionary[key]['set'])
         for consequent in consequents:
-            str_rule = copy.deepcopy(antecedents)
+            str_rule = deepcopy(antecedents)
             str_rule.append(consequent)
             rule = []
             var_idx = 0
@@ -211,9 +211,12 @@ def filter_rules_1(NFN_variables, rules_dictionary, rules=None):
 
 def create_rules(fuzzy_rules):
     rules = []
+    consequent_terms_copy = []
     for fuzzy_rule in fuzzy_rules:
-        rules.append(Rule(fuzzy_rule[:4], fuzzy_rule[4:]))
-    return rules
+        cpy = deepcopy(fuzzy_rule[4:])
+        consequent_terms_copy.extend(cpy)
+        rules.append(Rule(fuzzy_rule[:4], cpy))
+    return rules, consequent_terms_copy
 
 def update_rules(NFN_variables, episodes, rules):
     print('Previous # of rules = %s' % len(rules))

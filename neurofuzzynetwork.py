@@ -157,7 +157,8 @@ class GenericASN():
 #        self.eta = 0.15 # the learning rate
 #        self.eta = 0.0000000005 # achieved 186 reward
 #        self.eta = 75e-12
-        self.eta = 25e-12
+#        self.eta = 25e-12
+        self.eta = 5e-7
         self.inputVariables = inputVariables
         self.outputVariables = outputVariables
         self.antecedents = self.__antecedents() # generates the antecedents layer
@@ -226,6 +227,7 @@ class GenericASN():
             for col in range(len(self.consequents)):
                 consequent = self.consequents[col]
                 if consequent in rule.consequents:
+#                if consequent.label in rule.consequents[0].label:
                     weights[row, col] = 1
         return weights            
     def updateRules(self, new_rules):
@@ -294,11 +296,14 @@ class GenericASN():
 #            consequent.params['center'] += self.eta * dv_dF * ((consequent.params['sigma'] * u_i) / denominator)
 #            consequent.params['sigma'] += self.eta * dv_dF * (((consequent.params['center'] * u_i * denominator) - (numerator * u_i)) / (pow(denominator, 2)))
             consequent.params['center'] += self.eta * np.sign(dv_dF) * ((consequent.params['sigma'] * u_i) / denominator)
-            consequent.params['sigma'] += self.eta * np.sign(dv_dF) * (((consequent.params['center'] * u_i * denominator) - (numerator * u_i)) / (pow(denominator, 2)))
+#            consequent.params['sigma'] += self.eta * (((consequent.params['center'] * u_i * denominator) - (numerator * u_i)) / (pow(denominator, 2))) # remove dv_dF because it results in sigma becoming negative, which makes no sense
+
+#            consequent.params['sigma'] += self.eta * np.sign(dv_dF) * (((consequent.params['center'] * u_i * denominator) - (numerator * u_i)) / (pow(denominator, 2))) # can result in large negative numbers -- need to fix
 
         # (2/2) tune antecedents
         
-        delta_5 = np.sign(dv_dF)
+        delta_5 = 1
+#        delta_5 = np.sign(dv_dF)
         delta_4 = {} # indexed by consequents
         for idx in range(len(self.consequents)):
             u_i = o4activation[idx]
@@ -364,5 +369,5 @@ class GenericASN():
 #                print('delta_m_ij %s' % delta_m_ij)
 #                print('change of %s center = %s' % (antecedent.label, self.eta * dE_da_i * delta_m_ij))
                 antecedent.params['center'] += self.eta * dE_da_i * delta_m_ij
-                antecedent.params['sigma'] += self.eta * dE_da_i * delta_sigma_ij
+#                antecedent.params['sigma'] += self.eta * dE_da_i * delta_sigma_ij
 #                print('c = %s , sigma = %s' % (antecedent.params['center'], antecedent.params['sigma']))

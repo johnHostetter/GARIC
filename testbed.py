@@ -163,7 +163,7 @@ def demo(aen, NFN_variables, rules, data, explore, seed):
             
     rewards = []
     backpropagate = True
-    for t in range(2000):
+    for t in range(4000):
         env.render()
 #        if done and len(episodes) % 5 == 0 and not(backpropagate):
 #            print('Updating fuzzy logic control rules...')

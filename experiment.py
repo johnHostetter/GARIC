@@ -15,7 +15,8 @@ features = ['Cart Position', 'Cart Velocity', 'Pole Angle', 'Pole Velocity At Ti
 efs = EmpiricalFuzzySet(features)
 NFN_variables = efs.main(data)
 from ruleGeneration import init_rules
-rules = init_rules(NFN_variables, data.episodes)
+rules, consequent_terms = init_rules(NFN_variables, data.episodes)
+NFN_variables[4].terms = consequent_terms
 from testbed import demo
 # for random play seed = 11, seed = 6, 7, 8, 9 (original) or 10
 data_1, agent = demo(data.aen, NFN_variables, rules, data, explore=False, seed=9)
