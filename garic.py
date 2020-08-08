@@ -11,7 +11,7 @@ import random
 import numpy as np
 import matplotlib.pyplot as plt
 
-np.random.seed(0)
+#np.random.seed(0)
 
 class GARIC():
     """ Generalized Approximate Reasoning Intelligent Controller """
@@ -473,7 +473,8 @@ class SAM():
                 F_prime = np.random.normal(mu, 1/sigma, samples)[0]
             else:
 #                F_prime = np.random.normal(mu, self.upper, samples)[0] # temporary fix?
-                F_prime = np.random.normal(0, 1, samples)[0]
+#                F_prime = np.random.normal(0, 1, samples)[0]
+                F_prime = np.random.uniform(-1,1,size=1)[0]
 #                F_prime = mu
 #        if F_prime < -25:
 #            F_prime = -25

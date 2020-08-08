@@ -10,7 +10,7 @@ from copy import copy, deepcopy
 import numpy as np
 from neurofuzzynetwork import Rule
 
-np.random.seed(0)
+#np.random.seed(0)
 
 def fuzzify(NFN_variables, x):
     """ Fuzzify an observation to its corresponding fuzzy regions. """
@@ -180,7 +180,7 @@ def filter_rules_1(NFN_variables, rules_dictionary, rules=None):
     print('max: %s' % max(set(max_degs)))
 #    threshold = max(max_degs) * 0.5
     
-    max_degs = max_degs[-1:]
+    max_degs = max_degs[-n:]
     threshold = min(max_degs)
     print('threshold: %s' % threshold) 
     
@@ -213,6 +213,7 @@ def create_rules(fuzzy_rules):
     rules = []
     consequent_terms_copy = []
     for fuzzy_rule in fuzzy_rules:
+#        rules.append(Rule(fuzzy_rule[:4], fuzzy_rule[4:]))
         cpy = deepcopy(fuzzy_rule[4:])
         consequent_terms_copy.extend(cpy)
         rules.append(Rule(fuzzy_rule[:4], cpy))

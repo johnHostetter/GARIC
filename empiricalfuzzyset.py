@@ -11,9 +11,9 @@ import matplotlib.pyplot as plt
 from scipy.spatial import distance
 from collections import Counter
 from statistics import stdev 
-from neurofuzzynetwork import Term, Variable, NFN_bellShapedMembership
+from neurofuzzynetwork import Term, Variable, NFN_bellShapedMembership, NFN_leftSigmoidMembership, NFN_rightSigmoidMembership, NFN_generalBellShapedMembership
 
-np.random.seed(0)
+#np.random.seed(0)
 
 class EmpiricalFuzzySet():
     def __init__(self, features):
@@ -121,7 +121,7 @@ class EmpiricalFuzzySet():
         
         for i in range(len(U)):
             mm = self.multimodalDensity(data.X, U, F, i, distance.euclidean)
-            print('%s/%s: %s' % (i, len(U), mm))
+#            print('%s/%s: %s' % (i, len(U), mm))
             densities[mm] = i # add the multimodal density to the set
             x_lst.append(U[i])
             y_lst.append(mm)
@@ -252,9 +252,9 @@ class EmpiricalFuzzySet():
                 if member:
                     p1[i] = pi
                     
-            print(iteration)
+#            print(iteration)
             iteration += 1
-            print('%s vs %s' % (len(p1.keys()), len(p0.keys())))
+#            print('%s vs %s' % (len(p1.keys()), len(p0.keys())))
             runAgain = len(p1.keys()) < len(p0.keys()) # step 13
             p0 = p1 # step 12
             
@@ -421,15 +421,36 @@ class EmpiricalFuzzySet():
             var_label = self.features[var_key]
             terms = []
             term_label_idx = 0
+            
+            cs = []
+            min_c = float('inf')
+            max_c = -float('inf')
+            for term_key in variables[var_key].keys():
+                c = variables[var_key][term_key]['center']
+                cs.append(c)
+                if c < min_c:
+                    min_c = c
+                elif c > max_c:
+                    max_c = c
+                    
+            print(cs)
         
             for term_key in variables[var_key].keys():
                 c = variables[var_key][term_key]['center']
                 sig = variables[var_key][term_key]['sigma']
                 sup = variables[var_key][term_key]['support']
-                params = {'center':c, 'sigma':sig}
+                params = {'center':c, 'sigma':sig, 'b':1}
                 term_label = term_labels[term_label_idx]
                 
-                term = Term(var_key, NFN_bellShapedMembership, params, sup, term_label, var_label)
+                func = NFN_generalBellShapedMembership
+                if c == min(cs):
+                    params['b'] = 2
+                    func = NFN_generalBellShapedMembership
+                elif c == max(cs):
+                    params['b'] = 2
+                    func = NFN_generalBellShapedMembership
+                
+                term = Term(var_key, func, params, sup, term_label, var_label)
                 
                 term_label_idx += 1
                 terms.append(term)

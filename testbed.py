@@ -13,7 +13,7 @@ from ruleGeneration import update_rules
 from neurofuzzynetwork import eFL_ACC
 from continuous_cartpole import ContinuousCartPoleEnv
 
-np.random.seed(0)
+#np.random.seed(0)
 
 class Data():
     def __init__(self, X, aen, episodes):
@@ -70,8 +70,8 @@ def updateAgent(agent, t, observation, reward, done, reset, F, backpropagate):
         agent.asn.backpropagation(agent.aen, agent.sam, t, F)
     return agent
         
-def initEnv(seed, min_action, max_action):
-    env = ContinuousCartPoleEnv(seed)
+def initEnv(seed, angle, min_action, max_action):
+    env = ContinuousCartPoleEnv(seed, angle)
     env.seed = seed
     env.min_action = min_action
     env.max_action = max_action
@@ -92,11 +92,11 @@ def prompt():
     print('continue?')
     input()
     
-def randomPlay(seed):
+def randomPlay(seed, angle):
     """ Generate random gameplay for initialization of learning method. """
     X = []
     steps = []
-    env = initEnv(seed, -1, 1)
+    env = initEnv(seed, angle, -1, 1)
     observation = env.reset()
     reset = True
     
@@ -140,12 +140,12 @@ def randomPlay(seed):
     env.close()
     return Data(X, aen, episodes)
 
-def demo(aen, NFN_variables, rules, data, explore, seed):
+def demo(aen, NFN_variables, rules, data, time, explore, seed, angle):
     """ Demo of learning method. """
     X = []
     steps = []
     agent = eFL_ACC(NFN_variables[:4], NFN_variables[4:], rules, 5, lower=-2, upper=2)    
-    env = initEnv(seed, -100, 100)
+    env = initEnv(seed, angle, -100, 100)
     observation = env.reset()
     reset = True
     done = False
@@ -163,7 +163,7 @@ def demo(aen, NFN_variables, rules, data, explore, seed):
             
     rewards = []
     backpropagate = True
-    for t in range(4000):
+    for t in range(time):
         env.render()
 #        if done and len(episodes) % 5 == 0 and not(backpropagate):
 #            print('Updating fuzzy logic control rules...')

@@ -11,7 +11,7 @@ import numpy as np
 from garic import AEN, SAM
 import matplotlib.pyplot as plt
 
-np.random.seed(0)
+#np.random.seed(0)
 
 def NFN_gaussianMembership(params, x):
     numerator = (-1) * pow(x - params['center'], 2)
@@ -22,11 +22,15 @@ def NFN_bellShapedMembership(params, x):
     f = -1 * pow((x - params['center']), 2) / pow(params['sigma'], 2)
     return pow(math.e, f)
 
-#def NFN_leftSigmoidMembership(params, x):
-#    return 1 / (pow(math.e, np.abs(25/params['sigma']) * (x + params['center'])) + 1)
-#
-#def NFN_rightSigmoidMembership(params, x):
-#    return 1 / (pow(math.e, -np.abs(25/params['sigma']) * (x + params['center'])) + 1)
+def NFN_generalBellShapedMembership(params, x):
+    f = 1 / (1 + pow(abs((x - params['center']) / params['sigma']), 2*params['b']))
+    return f   
+
+def NFN_leftSigmoidMembership(params, x):
+    return 1 / (pow(math.e, np.abs(15/params['sigma']) * (x + params['center'])) + 1)
+
+def NFN_rightSigmoidMembership(params, x):
+    return 1 / (pow(math.e, -np.abs(15/params['sigma']) * (x + params['center'])) + 1)
 
 class Term():
     """ a linguistic term for a linguistic variable """
@@ -157,8 +161,8 @@ class GenericASN():
 #        self.eta = 0.15 # the learning rate
 #        self.eta = 0.0000000005 # achieved 186 reward
 #        self.eta = 75e-12
-#        self.eta = 25e-12
-        self.eta = 5e-7
+        self.eta = 15e-14
+#        self.eta = 0.3
         self.inputVariables = inputVariables
         self.outputVariables = outputVariables
         self.antecedents = self.__antecedents() # generates the antecedents layer
@@ -269,6 +273,35 @@ class GenericASN():
             denominator += (self.consequents[idx].params['sigma'] * o4activation[idx])
         a = f / denominator
         return a    
+    def dmu_dx(self, params, x):
+        b = params['b']
+        c = params['center']
+        a = params['sigma']
+        numerator = 2 * b * math.pow(abs((x - c)/a), 2*b - 2) * (x - c)
+        denominator = math.pow(a, 2) * math.pow((1 + math.pow(abs((x - c)/a), 2*b)), 2)
+        return -numerator / denominator
+    def dmu_dc(self, params, x):
+        b = params['b']
+        c = params['center']
+        a = params['sigma']
+        numerator = 2 * b * math.pow(abs((-c + x)/a), 2*b - 2) * (-c + x)
+        denominator = math.pow(a, 2) * math.pow((1 + math.pow(abs((x - c)/a), 2*b)), 2)
+        return numerator / denominator
+    def dmu_db(self, params, x):
+        b = params['b']
+        c = params['center']
+        a = params['sigma']  
+        numerator = 2 * np.log(math.pow(abs((x - c)/a) * abs((x - c)/a), 2*b))
+        denominator = math.pow(1 + math.pow(abs((x - c)/a), 2*b), 2)
+        return -numerator / denominator
+    def dmu_da(self, params, x):
+        b = params['b']
+        c = params['center']
+        a = params['sigma']  
+        numerator = 2 * b * math.pow(abs((x - c)/a), 2*b - 2) * math.pow((x - c), 2)
+        denominator = math.pow(a, 3) * math.pow((1 + math.pow(abs((x - c)/a), 2*b)), 2)
+        return numerator / denominator
+    
     def backpropagation(self, aen, sam, t, actual):
         # (1/2) tune consequents
         if (self.Fs[t] - self.Fs[t-1]) == 0: # divide by zero error is possible here, investigate why later
@@ -295,15 +328,26 @@ class GenericASN():
             consequent = self.consequents[idx]
 #            consequent.params['center'] += self.eta * dv_dF * ((consequent.params['sigma'] * u_i) / denominator)
 #            consequent.params['sigma'] += self.eta * dv_dF * (((consequent.params['center'] * u_i * denominator) - (numerator * u_i)) / (pow(denominator, 2)))
-            consequent.params['center'] += self.eta * np.sign(dv_dF) * ((consequent.params['sigma'] * u_i) / denominator)
+            
+            
+            # TRYING OUT GENERAL BELL SHAPED
+#            consequent.params['center'] += self.eta * np.sign(dv_dF) * ((consequent.params['sigma'] * u_i) / denominator)
+            local_eta = 5e-6
+#            local_eta = 5e-3
+            consequent.params['center'] += local_eta * np.sign(dv_dF) * self.dmu_dc(consequent.params, u_i)
+            consequent.params['sigma'] += local_eta * self.dmu_da(consequent.params, u_i)
+            consequent.params['b'] += 3e-10 * np.sign(dv_dF) * self.dmu_db(consequent.params, u_i)
+
+            
+            
 #            consequent.params['sigma'] += self.eta * (((consequent.params['center'] * u_i * denominator) - (numerator * u_i)) / (pow(denominator, 2))) # remove dv_dF because it results in sigma becoming negative, which makes no sense
 
 #            consequent.params['sigma'] += self.eta * np.sign(dv_dF) * (((consequent.params['center'] * u_i * denominator) - (numerator * u_i)) / (pow(denominator, 2))) # can result in large negative numbers -- need to fix
 
         # (2/2) tune antecedents
         
-        delta_5 = 1
-#        delta_5 = np.sign(dv_dF)
+#        delta_5 = 1
+        delta_5 = np.sign(dv_dF)
         delta_4 = {} # indexed by consequents
         for idx in range(len(self.consequents)):
             u_i = o4activation[idx]
@@ -369,5 +413,5 @@ class GenericASN():
 #                print('delta_m_ij %s' % delta_m_ij)
 #                print('change of %s center = %s' % (antecedent.label, self.eta * dE_da_i * delta_m_ij))
                 antecedent.params['center'] += self.eta * dE_da_i * delta_m_ij
-#                antecedent.params['sigma'] += self.eta * dE_da_i * delta_sigma_ij
+                antecedent.params['sigma'] += self.eta * dE_da_i * delta_sigma_ij
 #                print('c = %s , sigma = %s' % (antecedent.params['center'], antecedent.params['sigma']))
